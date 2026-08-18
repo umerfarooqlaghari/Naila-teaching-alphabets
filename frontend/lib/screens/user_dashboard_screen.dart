@@ -57,42 +57,51 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Hello, $_username 👋",
-                        style: GoogleFonts.outfit(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF38BDF8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Hello, $_username 👋",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF38BDF8),
+                          ),
                         ),
-                      ),
-                      Text(
-                        "Ready for today's phonetics practice?",
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          color: const Color(0xFF94A3B8),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Ready for phonetics practice?",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            color: const Color(0xFF94A3B8),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         onPressed: _handleLogout,
-                        icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 24),
+                        icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
                         tooltip: "Logout",
                       ),
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: const Color(0xFF1E293B),
                           shape: BoxShape.circle,
                           border: Border.all(color: const Color(0xFF4361EE)),
                         ),
-                        child: const Icon(Icons.star_rounded, color: Colors.amber, size: 24),
+                        child: const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
                       ),
                     ],
                   ),

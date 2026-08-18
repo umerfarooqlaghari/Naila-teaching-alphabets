@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'email_or_username': input,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 45));
 
       final data = jsonDecode(response.body);
 
@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      setState(() => _errorMessage = "Could not connect to backend server. Make sure Python FastAPI is running.");
+      setState(() => _errorMessage = "Connection timeout / server waking up. Please try signing in again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

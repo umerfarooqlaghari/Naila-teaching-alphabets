@@ -69,7 +69,7 @@ class _PaymentUploadScreenState extends State<PaymentUploadScreen> {
         ),
       );
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
       final response = await http.Response.fromStream(streamedResponse);
       final data = jsonDecode(response.body);
 
@@ -83,7 +83,7 @@ class _PaymentUploadScreenState extends State<PaymentUploadScreen> {
         setState(() => _errorMessage = data['detail'] ?? data['message'] ?? 'Registration failed');
       }
     } catch (e) {
-      setState(() => _errorMessage = "Network error registering user. Check backend server.");
+      setState(() => _errorMessage = "Server timeout waking up backend. Please tap Submit again in a few seconds.");
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -137,27 +137,24 @@ class _PaymentUploadScreenState extends State<PaymentUploadScreen> {
                   ),
 
                   const SizedBox(height: 24),
-
-                  if (_errorMessage != null)
+                  if (_errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.red.withOpacity(0.15),
                         border: Border.all(color: Colors.redAccent),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(_errorMessage!, style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 13)),
+                      child: Text(_errorMessage!, style: GoogleFonts.outfit(color: Colors.redAccent, fontSize: 13), textAlign: TextAlign.center),
                     ),
+                    const SizedBox(height: 16),
+                  ],
 
-                  // Upload Payment Screenshot Area
-                  Text("Upload Payment Screenshot", style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-
+                  // Upload Payment Screenshot Box
                   GestureDetector(
                     onTap: _pickScreenshot,
                     child: Container(
-                      height: 160,
+                      padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E293B),
                         borderRadius: BorderRadius.circular(20),
@@ -166,37 +163,40 @@ class _PaymentUploadScreenState extends State<PaymentUploadScreen> {
                           width: 2,
                         ),
                       ),
-                      child: _selectedImage != null
-                          ? Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 48),
-                                const SizedBox(height: 8),
-                                Text("Screenshot Attached Successfully!", style: GoogleFonts.outfit(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
-                                Text("Tap to change image", style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 12)),
-                              ],
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.cloud_upload_rounded, color: Color(0xFF38BDF8), size: 48),
-                                const SizedBox(height: 8),
-                                Text("Tap to Upload Bank Receipt / Screenshot", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
-                                Text("PNG, JPG supported", style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12)),
-                              ],
+                      child: Column(
+                        children: [
+                          Icon(
+                            _selectedImage != null ? Icons.check_circle_rounded : Icons.cloud_upload_rounded,
+                            color: _selectedImage != null ? Colors.greenAccent : const Color(0xFF4361EE),
+                            size: 48,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _selectedImage != null ? "Screenshot Attached Successfully!" : "Upload Payment Screenshot",
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _selectedImage != null ? Colors.greenAccent : Colors.white,
                             ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedImage != null ? "Tap to change image" : "Select bank transfer receipt from gallery",
+                            style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
 
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981), // Emerald
+                        backgroundColor: const Color(0xFF10B981),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 6,
                       ),
                       onPressed: _isSubmitting ? null : _submitRegistration,
                       child: _isSubmitting
@@ -215,12 +215,19 @@ class _PaymentUploadScreenState extends State<PaymentUploadScreen> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 13)),
-          Text(value, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
         ],
       ),
     );
