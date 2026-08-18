@@ -419,11 +419,11 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         final spoken = _recognizedWords.trim().toLowerCase();
 
         // Check if spoken text matches target sound, word, or letter
-        bool isTargetMatch = spoken.contains(targetSound) ||
+        bool isTargetMatch = spoken.isNotEmpty && (
+                             spoken.contains(targetSound) ||
                              spoken.contains(targetWord) ||
                              spoken.contains(targetLetter) ||
-                             (spoken.isNotEmpty && spoken.startsWith(targetLetter)) ||
-                             (spoken.isEmpty && (childSpoke || (audioPath != null && audioPath.isNotEmpty)));
+                             spoken.startsWith(targetLetter));
 
         // Check cross-letter interference
         bool isOtherMatch = false;
