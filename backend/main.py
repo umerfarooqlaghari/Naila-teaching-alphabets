@@ -22,9 +22,9 @@ try:
     sys_path = os.environ.get("PATH", "")
     if ffmpeg_dir not in sys_path:
         os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + sys_path
-    print(f"🎬 [FFmpeg Ready] Standalone FFmpeg loaded from: {ffmpeg_exe}")
+    print(f"[FFmpeg Ready] Standalone FFmpeg loaded from: {ffmpeg_exe}")
 except Exception as f_err:
-    print(f"⚠️ [FFmpeg Notice] {f_err}")
+    print(f"[FFmpeg Notice] {f_err}")
 
 try:
     from pymongo import MongoClient
@@ -74,14 +74,30 @@ db = None
 if MONGODB_URI:
     try:
         from pymongo import MongoClient
-        mongo_client = MongoClient(MONGODB_URI)
+        try:
+            import certifi
+            ca = certifi.where()
+            mongo_client = MongoClient(MONGODB_URI, tlsCAFile=ca, serverSelectionTimeoutMS=5000)
+        except Exception:
+            mongo_client = MongoClient(MONGODB_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
+        
         db = mongo_client.get_default_database()
+        mongo_client.admin.command('ping')
         print("\n==================================================")
-        print("🍃 [MongoDB Atlas] Connected successfully to Cloud Database!")
-        print(f"📧 [Gmail SMTP] Service ready for: {SMTP_USER}")
+        print("[MongoDB Atlas] Connected successfully to Cloud Database!")
+        print(f"[Gmail SMTP] Service ready for: {SMTP_USER}")
         print("==================================================\n")
     except Exception as m_err:
-        print(f"⚠️ [MongoDB Atlas Error] {m_err}")
+        print(f"[MongoDB Atlas Connection Notice] {m_err}")
+        try:
+            from pymongo import MongoClient
+            mongo_client = MongoClient(MONGODB_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
+            db = mongo_client.get_default_database()
+            mongo_client.admin.command('ping')
+            print("[MongoDB Atlas] Connected with SSL Fallback!")
+        except Exception as m_err2:
+            print(f"[MongoDB Atlas Connection Failed] {m_err2}")
+            db = None
 
 # Local SQLite Fallback if MongoDB URI is not set
 if db is None:
@@ -164,17 +180,22 @@ def init_db():
 init_db()
 
 
-# ─── Whisper AI Loading ────────────────────────────────────────────────────────
+# ─── Whisper AI Lazy Loading ───────────────────────────────────────────────────
 _whisper_model = None
-try:
-    import whisper as _whisper_lib
-    print("[Vaila] Pre-loading Whisper base model…")
-    _whisper_model = _whisper_lib.load_model("base")
-    print("[Vaila] Whisper model ready ✓")
-except Exception as e:
-    print(f"[Vaila Notice] Whisper AI running in Dev mode: {e}")
+_whisper_loaded = False
 
 def get_whisper():
+    global _whisper_model, _whisper_loaded
+    if not _whisper_loaded:
+        _whisper_loaded = True
+        try:
+            import whisper as _whisper_lib
+            print("[Vaila] Loading lightweight Whisper tiny model for Render cloud...")
+            _whisper_model = _whisper_lib.load_model("tiny")
+            print("[Vaila] Whisper tiny model loaded successfully")
+        except Exception as e:
+            print(f"[Vaila Notice] Whisper AI running in lightweight evaluation mode: {e}")
+            _whisper_model = None
     return _whisper_model
 
 PHONETIC_TARGET_WORDS = { "a": "aaa", "b": "buh", "c": "kuh", "d": "dah", "e": "eh" }
