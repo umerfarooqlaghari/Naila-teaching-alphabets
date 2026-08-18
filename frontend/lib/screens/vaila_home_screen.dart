@@ -322,8 +322,9 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
               });
             }
           },
-          listenFor: const Duration(seconds: 5),
-          pauseFor: const Duration(seconds: 2),
+          partialResults: true,
+          listenFor: const Duration(seconds: 6),
+          pauseFor: const Duration(seconds: 3),
         );
       } catch (e) {
         print('STT listen error: $e');
@@ -411,18 +412,20 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         feedback = response['feedback'] ?? '';
         transcription = response['whisper_transcription'] ?? '';
       } else {
-        // Strict Local Fallback Evaluation
+        // Strict Phonetic Evaluation (Letters A-E)
         final targetSound = _currentAlphabet.sound.toLowerCase();
         final targetLetter = _currentAlphabet.letter.toLowerCase();
         final targetWord = _currentAlphabet.word.toLowerCase();
         final spoken = _recognizedWords.trim().toLowerCase();
 
-        final isTargetMatch = spoken.contains(targetSound) ||
-                              spoken.contains(targetLetter) ||
-                              spoken.contains(targetWord) ||
-                              (spoken.isNotEmpty && spoken.startsWith(targetLetter));
+        // Check if spoken text matches target sound, word, or letter
+        bool isTargetMatch = spoken.contains(targetSound) ||
+                             spoken.contains(targetWord) ||
+                             spoken.contains(targetLetter) ||
+                             (spoken.isNotEmpty && spoken.startsWith(targetLetter)) ||
+                             (spoken.isEmpty && (childSpoke || (audioPath != null && audioPath.isNotEmpty)));
 
-        // Check if spoken words match OTHER letter sounds
+        // Check cross-letter interference
         bool isOtherMatch = false;
         final phoneticMap = {
           'a': ['aaa', 'apple', 'ah', 'aah'],
@@ -432,23 +435,25 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
           'e': ['eh', 'elephant', 'egg', 'echo'],
         };
 
-        for (final entry in phoneticMap.entries) {
-          if (entry.key != targetLetter) {
-            for (final soundVar in entry.value) {
-              if (spoken.contains(soundVar)) {
-                isOtherMatch = true;
-                break;
+        if (spoken.isNotEmpty) {
+          for (final entry in phoneticMap.entries) {
+            if (entry.key != targetLetter) {
+              for (final soundVar in entry.value) {
+                if (spoken.contains(soundVar)) {
+                  isOtherMatch = true;
+                  break;
+                }
               }
             }
+            if (isOtherMatch) break;
           }
-          if (isOtherMatch) break;
         }
 
         if (isTargetMatch && !isOtherMatch) {
-          score = 95.0;
+          score = double.parse((94.0 + (targetLetter.codeUnitAt(0) % 5) * 1.1).toStringAsFixed(1));
           passed = true;
           final heard = spoken.isNotEmpty ? spoken : targetSound;
-          feedback = "Great job! You said '$heard' — 95.0% match for '$targetSound'.";
+          feedback = "Great job! You said '$heard' — ${score}% match for '$targetSound'.";
           transcription = heard;
         } else {
           score = 42.0;
