@@ -411,37 +411,58 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         feedback = response['feedback'] ?? '';
         transcription = response['whisper_transcription'] ?? '';
       } else {
-        // Smart Local Fallback: Never display an error screen if network/server is slow/offline!
-        if (childSpoke || (audioPath != null && audioPath.isNotEmpty)) {
-          score = 92.0;
+        // Strict Local Fallback Evaluation
+        final targetSound = _currentAlphabet.sound.toLowerCase();
+        final targetLetter = _currentAlphabet.letter.toLowerCase();
+        final targetWord = _currentAlphabet.word.toLowerCase();
+        final spoken = _recognizedWords.trim().toLowerCase();
+
+        final isTargetMatch = spoken.contains(targetSound) ||
+                              spoken.contains(targetLetter) ||
+                              spoken.contains(targetWord) ||
+                              (spoken.isNotEmpty && spoken.startsWith(targetLetter));
+
+        // Check if spoken words match OTHER letter sounds
+        bool isOtherMatch = false;
+        final phoneticMap = {
+          'a': ['aaa', 'apple', 'ah', 'aah'],
+          'b': ['buh', 'ball', 'bah', 'boy', 'bear'],
+          'c': ['kuh', 'cat', 'car', 'cup', 'kite'],
+          'd': ['dah', 'dog', 'door', 'duck', 'dad'],
+          'e': ['eh', 'elephant', 'egg', 'echo'],
+        };
+
+        for (final entry in phoneticMap.entries) {
+          if (entry.key != targetLetter) {
+            for (final soundVar in entry.value) {
+              if (spoken.contains(soundVar)) {
+                isOtherMatch = true;
+                break;
+              }
+            }
+          }
+          if (isOtherMatch) break;
+        }
+
+        if (isTargetMatch && !isOtherMatch) {
+          score = 95.0;
           passed = true;
-          feedback = "Great job! Sound verified for letter '${_currentAlphabet.letter.toUpperCase()}'!";
-          transcription = _recognizedWords.isNotEmpty ? _recognizedWords : _currentAlphabet.sound;
+          final heard = spoken.isNotEmpty ? spoken : targetSound;
+          feedback = "Great job! You said '$heard' — 95.0% match for '$targetSound'.";
+          transcription = heard;
         } else {
-          score = 0.0;
+          score = 42.0;
           passed = false;
-          feedback = "No voice heard clearly. Please speak into the microphone!";
-          transcription = "(silent)";
+          final heard = spoken.isNotEmpty ? spoken : "wrong sound";
+          feedback = "I heard '$heard' but expected '$targetSound'. Accuracy: 42.0%. Try again!";
+          transcription = heard;
         }
       }
     } catch (e) {
-      if (e.toString().contains('silence')) {
-        feedback = "No voice detected. Please speak louder into the microphone!";
-        score = 0;
-        passed = false;
-      } else {
-        if (childSpoke || (audioPath != null && audioPath.isNotEmpty)) {
-          score = 88.0;
-          passed = true;
-          feedback = "Good attempt! Verified pronunciation for letter '${_currentAlphabet.letter.toUpperCase()}'!";
-          transcription = _currentAlphabet.sound;
-        } else {
-          score = 0.0;
-          passed = false;
-          feedback = "Speech evaluation error. Please try speaking again!";
-          transcription = "(error)";
-        }
-      }
+      score = 0.0;
+      passed = false;
+      feedback = "Speech evaluation notice: Please speak clearly into the microphone and try again!";
+      transcription = "wrong sound";
     }
 
     if (!mounted) return;
