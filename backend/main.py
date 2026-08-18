@@ -653,10 +653,34 @@ async def evaluate_audio(
                         other_variants.add(v.lower())
 
         stt_transcription = spoken_text.strip().lower()
-
-        # Transcribe audio file with Whisper
         whisper_transcription = ""
-        if file is not None:
+
+        # Instant Fast-Path: If native phone Speech-To-Text recognized words, evaluate instantly (< 0.1s)
+        if stt_transcription:
+            cleaned_stt = stt_transcription.strip(".,!? ").lower()
+            stt_words = set(cleaned_stt.split())
+            has_target_stt = (
+                cleaned_stt in target_variants or
+                bool(stt_words.intersection(target_variants)) or
+                (len(target_sound) > 1 and target_sound in cleaned_stt) or
+                cleaned_stt == target or
+                f"letter {target}" in cleaned_stt or
+                f"{target} sound" in cleaned_stt or
+                (target == 'c' and any(w.startswith('c') or w.startswith('k') for w in stt_words)) or
+                any(w.startswith(target) for w in stt_words)
+            )
+            has_other_stt = False
+            for other_k in ["a", "b", "c", "d", "e"]:
+                if other_k != target:
+                    other_k_vars = set(PHONETIC_VARIANTS.get(other_k, []))
+                    if (cleaned_stt in other_k_vars or bool(stt_words.intersection(other_k_vars))):
+                        has_other_stt = True
+                        break
+            if has_target_stt or has_other_stt:
+                whisper_transcription = stt_transcription
+
+        # Transcribe audio file with fast Whisper AI only if STT did not produce a clear match
+        if not whisper_transcription and file is not None:
             try:
                 audio_bytes = await file.read()
                 if audio_bytes and len(audio_bytes) > 200:
@@ -669,7 +693,18 @@ async def evaluate_audio(
                     model = get_whisper()
                     if model is not None:
                         prompt = "Phonics sounds: aaa, buh, kuh, dah, eh, ah, apple, ball, cat, dog, elephant."
-                        result = model.transcribe(tmp_path, language="en", fp16=False, initial_prompt=prompt, no_speech_threshold=0.8)
+                        import asyncio
+                        result = await asyncio.to_thread(
+                            model.transcribe,
+                            tmp_path,
+                            language="en",
+                            fp16=False,
+                            initial_prompt=prompt,
+                            beam_size=1,
+                            best_of=1,
+                            temperature=0.0,
+                            condition_on_previous_text=False
+                        )
                         whisper_transcription = result.get("text", "").strip().lower()
                     try: os.unlink(tmp_path)
                     except Exception: pass
