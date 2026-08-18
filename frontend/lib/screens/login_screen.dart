@@ -17,8 +17,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  static const String apiUrl = 'http://10.0.2.2:8000';
-  static const String fallbackApiUrl = 'http://localhost:8000';
+  static const String apiUrl = 'https://naila-teaching-alphabets.onrender.com';
+  static const String fallbackApiUrl = 'https://naila-teaching-alphabets.onrender.com';
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -283,7 +283,7 @@ class _MonthlyPaymentModalState extends State<MonthlyPaymentModal> {
     setState(() => _isUploading = true);
 
     try {
-      final targetUrl = kIsWeb ? 'http://localhost:8000/api/auth/upload-monthly-payment' : 'http://10.0.2.2:8000/api/auth/upload-monthly-payment';
+      final targetUrl = 'https://naila-teaching-alphabets.onrender.com/api/auth/upload-monthly-payment';
       final request = http.MultipartRequest('POST', Uri.parse(targetUrl));
 
       request.fields['username'] = widget.username;

@@ -30,6 +30,8 @@ class _UserDashboardScreenState extends State<UserDashboardScreen> {
         _username = user['username'] ?? 'Student';
       });
     }
+  }
+
   void _handleLogout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

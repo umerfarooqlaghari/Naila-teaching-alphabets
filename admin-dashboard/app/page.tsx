@@ -56,7 +56,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'users' | 'analytics'>('users');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://naila-teaching-alphabets.onrender.com';
 
   useEffect(() => {
     const token = localStorage.getItem('vaila_admin_token');
@@ -323,7 +323,7 @@ export default function AdminDashboard() {
                           </button>
                         ) : (
                           <button
-                            onClick={() => handleApproveUser(u.id)}
+                            onClick={() => handleApproveUser(u)}
                             style={{
                               backgroundColor: '#4361ee',
                               color: '#fff',

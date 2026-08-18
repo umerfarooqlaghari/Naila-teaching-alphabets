@@ -448,8 +448,8 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
 
   Future<Map<String, dynamic>?> _sendToBackend(String audioPath, String targetLetter, String spokenText) async {
     final urls = kIsWeb
-        ? ['http://127.0.0.1:8000', 'http://localhost:8000']
-        : ['http://10.0.2.2:8000', 'http://127.0.0.1:8000', 'http://localhost:8000'];
+        ? ['https://naila-teaching-alphabets.onrender.com', 'http://127.0.0.1:8000', 'http://localhost:8000']
+        : ['https://naila-teaching-alphabets.onrender.com', 'http://10.0.2.2:8000', 'http://127.0.0.1:8000', 'http://localhost:8000'];
 
     for (final baseUrl in urls) {
       try {

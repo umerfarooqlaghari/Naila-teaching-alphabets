@@ -15,8 +15,8 @@ class WaitingApprovalScreen extends StatefulWidget {
 }
 
 class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
-  static const String apiUrl = 'http://10.0.2.2:8000';
-  static const String fallbackApiUrl = 'http://localhost:8000';
+  static const String apiUrl = 'https://naila-teaching-alphabets.onrender.com';
+  static const String fallbackApiUrl = 'https://naila-teaching-alphabets.onrender.com';
 
   Timer? _statusTimer;
   bool _isApproved = false;
