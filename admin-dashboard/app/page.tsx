@@ -233,7 +233,7 @@ export default function AdminDashboard() {
               <thead>
                 <tr style={{ borderBottom: '1px solid #334155', textAlign: 'left' }}>
                   <th style={{ padding: '12px' }}>User Details</th>
-                  <th style={{ padding: '12px' }}>Registration Month</th>
+                  <th style={{ padding: '12px' }}>Registration Date</th>
                   <th style={{ padding: '12px' }}>Payment Screenshot</th>
                   <th style={{ padding: '12px' }}>Fee Expiry Status</th>
                   <th style={{ padding: '12px' }}>Approval Action</th>
@@ -247,7 +247,9 @@ export default function AdminDashboard() {
                       <div style={{ fontSize: '12px', color: '#94a3b8' }}>{u.email}</div>
                     </td>
                     <td style={{ padding: '16px 12px' }}>
-                      {u.registration_month}
+                      <div style={{ fontWeight: 600, color: '#fff' }}>
+                        {u.created_at || u.registration_month || 'N/A'}
+                      </div>
                     </td>
                     <td style={{ padding: '16px 12px' }}>
                       {u.registration_screenshot ? (
