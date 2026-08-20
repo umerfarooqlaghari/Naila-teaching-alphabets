@@ -85,27 +85,14 @@ if MONGODB_URI:
         try:
             import certifi
             ca = certifi.where()
-            mongo_client = MongoClient(MONGODB_URI, tlsCAFile=ca, serverSelectionTimeoutMS=5000)
+            mongo_client = MongoClient(MONGODB_URI, tlsCAFile=ca, serverSelectionTimeoutMS=2000)
         except Exception:
-            mongo_client = MongoClient(MONGODB_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
-        
+            mongo_client = MongoClient(MONGODB_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=2000)
         db = mongo_client.get_default_database()
-        mongo_client.admin.command('ping')
-        print("\n==================================================")
         print("[MongoDB Atlas] Connected successfully to Cloud Database!")
-        print(f"[Gmail SMTP] Service ready for: {SMTP_USER}")
-        print("==================================================\n")
     except Exception as m_err:
         print(f"[MongoDB Atlas Connection Notice] {m_err}")
-        try:
-            from pymongo import MongoClient
-            mongo_client = MongoClient(MONGODB_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
-            db = mongo_client.get_default_database()
-            mongo_client.admin.command('ping')
-            print("[MongoDB Atlas] Connected with SSL Fallback!")
-        except Exception as m_err2:
-            print(f"[MongoDB Atlas Connection Failed] {m_err2}")
-            db = None
+        db = None
 
 # Local SQLite Fallback if MongoDB URI is not set
 if db is None:
