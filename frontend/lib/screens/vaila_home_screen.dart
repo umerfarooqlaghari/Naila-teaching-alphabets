@@ -479,24 +479,19 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
           }
         }
 
-        // Final Decision: FAIL if sample word or wrong sound spoken; PASS ONLY if sound spoken or mic volume recorded
-        if (isSampleWordSpoken || isWrongSoundSpoken) {
-          score = 42.0;
-          passed = false;
-          final heard = spoken.isNotEmpty ? spoken : (isSampleWordSpoken ? detectedSampleWord : detectedWrongSound);
-          feedback = "I heard '$heard' but expected sound '$targetSound'. Accuracy: 42.0%. Try again!";
-          transcription = heard;
-        } else if (isExplicitTargetSound || (childSpoke || (audioPath != null && audioPath.isNotEmpty))) {
+        // Final Decision: PASS ONLY if the explicit target sound is spoken!
+        // FAIL on sample words ("apple", "ball", etc.), wrong sounds, or unrecognized text.
+        if (isExplicitTargetSound) {
           score = double.parse((95.0 + (targetLetter.codeUnitAt(0) % 5) * 0.8).toStringAsFixed(1));
           passed = true;
-          final heard = isExplicitTargetSound ? spoken : targetSound;
-          feedback = "Great job! You said '$heard' — ${score}% match for '$targetSound'.";
-          transcription = heard;
+          feedback = "Great job! You said '$spoken' — ${score}% match for '$targetSound'.";
+          transcription = spoken;
         } else {
-          score = 0.0;
+          score = 42.0;
           passed = false;
-          feedback = "No voice heard clearly. Please speak into the microphone!";
-          transcription = "(silent)";
+          final heard = spoken.isNotEmpty ? spoken : (isSampleWordSpoken ? detectedSampleWord : (isWrongSoundSpoken ? detectedWrongSound : "wrong sound"));
+          feedback = "I heard '$heard' but expected sound '$targetSound'. Accuracy: 42.0%. Try again!";
+          transcription = heard;
         }
       }
     } catch (e) {
