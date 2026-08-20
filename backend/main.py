@@ -201,25 +201,11 @@ def get_whisper():
 PHONETIC_TARGET_WORDS = { "a": "aaa", "b": "buh", "c": "kuh", "d": "dah", "e": "eh" }
 IPA_REFERENCE_WORDS = { "a": "ah", "b": "buh", "c": "kuh", "d": "dah", "e": "eh" }
 PHONETIC_VARIANTS = {
-    "a": [
-        "aaa", "ah", "ahhh", "a", "aa", "ahh", "aaah", "apple", "uh", "uhh", "ha", "ar",
-        "art", "are", "arm", "all", "our", "out", "on", "up", "aah", "ey", "aye"
-    ],
-    "b": [
-        "buh", "bah", "ba", "b", "bu", "be", "bee", "ball", "bo", "bear", "boy", "book",
-        "bag", "bay", "bat", "bad", "bar", "box", "bus", "bug", "big", "bit", "by", "buy", "but"
-    ],
-    "c": [
-        "kuh", "cuh", "kah", "ca", "ka", "k", "c", "cat", "car", "co", "cup", "cap",
-        "can", "come", "cut", "key", "coo", "cow", "call", "cold", "cook", "king", "kite", "keep"
-    ],
-    "d": [
-        "dah", "da", "deh", "d", "dog", "du", "door", "dad", "day", "duck", "doll",
-        "do", "dot", "dark", "deep", "did", "die", "dig"
-    ],
-    "e": [
-        "eh", "ehh", "e", "ay", "aeh", "elephant", "ed", "egg", "echo", "end", "every", "enter"
-    ],
+    "a": ["aaa", "apple", "ah", "aah", "aaah", "ahh", "aa"],
+    "b": ["buh", "ball", "bah", "boy", "bear", "book", "bag", "bat"],
+    "c": ["kuh", "cat", "car", "cup", "kite", "key", "cook"],
+    "d": ["dah", "dog", "door", "duck", "dad", "doll"],
+    "e": ["eh", "elephant", "egg", "echo", "ed", "end"],
 }
 
 def text_to_ipa(word: str) -> str:
@@ -727,14 +713,9 @@ async def evaluate_audio(
                 cleaned in target_variants or
                 bool(words.intersection(target_variants)) or
                 (len(target_sound) > 1 and target_sound in cleaned) or
-                cleaned == target or
                 f"letter {target}" in cleaned or
                 f"{target} sound" in cleaned or
-                (target == 'b' and any(w.startswith('b') for w in words)) or
-                (target == 'c' and any(w.startswith('c') or w.startswith('k') for w in words)) or
-                (target == 'd' and any(w.startswith('d') for w in words)) or
-                (target == 'e' and any(w.startswith('e') for w in words)) or
-                (target == 'a' and any(w.startswith('a') for w in words))
+                any(tv in cleaned for tv in target_variants if len(tv) > 1)
             )
 
             # Check explicit match with other letters

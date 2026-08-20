@@ -383,7 +383,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       _isEvaluating = true;
     });
 
-    final bool childSpoke = kIsWeb || _voiceDetectedFlag || _peakVolumeDb > -40.0 || _recognizedWords.isNotEmpty;
+    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -40.0 || _recognizedWords.isNotEmpty;
     String? audioPath;
 
     try {
@@ -412,49 +412,63 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         feedback = response['feedback'] ?? '';
         transcription = response['whisper_transcription'] ?? '';
       } else {
-        // Strict Evaluation: Fail ONLY if a wrong letter's sound or sample word is spoken!
+        // Strict Evaluation: Match target letter sound/word, fail cross-letter or invalid sounds
         final targetSound = _currentAlphabet.sound.toLowerCase();
         final targetLetter = _currentAlphabet.letter.toLowerCase();
+        final targetWord = _currentAlphabet.word.toLowerCase();
         final spoken = _recognizedWords.trim().toLowerCase();
 
-        final wrongSoundsMap = {
-          'a': ['buh', 'kuh', 'dah', 'eh', 'ball', 'cat', 'dog', 'elephant'],
-          'b': ['aaa', 'kuh', 'dah', 'eh', 'apple', 'cat', 'dog', 'elephant'],
-          'c': ['aaa', 'buh', 'dah', 'eh', 'apple', 'ball', 'dog', 'elephant'],
-          'd': ['aaa', 'buh', 'kuh', 'eh', 'apple', 'ball', 'cat', 'elephant'],
-          'e': ['aaa', 'buh', 'kuh', 'dah', 'apple', 'ball', 'cat', 'dog'],
+        final letterVariants = {
+          'a': ['aaa', 'apple', 'ah', 'aah', 'aaah', 'ahh', 'aa'],
+          'b': ['buh', 'ball', 'bah', 'boy', 'bear', 'book', 'bag', 'bat'],
+          'c': ['kuh', 'cat', 'car', 'cup', 'kite', 'key', 'cook'],
+          'd': ['dah', 'dog', 'door', 'duck', 'dad', 'doll'],
+          'e': ['eh', 'elephant', 'egg', 'echo', 'ed', 'end'],
         };
 
-        bool isWrongSoundSpoken = false;
-        String detectedWrongSound = "";
+        final targetList = letterVariants[targetLetter] ?? [targetSound, targetWord];
+
+        // Check target match
+        bool isTargetMatch = false;
         if (spoken.isNotEmpty) {
-          final wrongList = wrongSoundsMap[targetLetter] ?? [];
-          for (final w in wrongList) {
-            if (spoken.contains(w)) {
-              isWrongSoundSpoken = true;
-              detectedWrongSound = w;
+          for (final tv in targetList) {
+            if (spoken.contains(tv)) {
+              isTargetMatch = true;
               break;
             }
           }
         }
 
-        if (isWrongSoundSpoken) {
-          score = 42.0;
-          passed = false;
-          final heard = spoken.isNotEmpty ? spoken : detectedWrongSound;
-          feedback = "I heard '$heard' but expected '$targetSound'. Accuracy: 42.0%. Try again!";
-          transcription = heard;
-        } else if (childSpoke || (audioPath != null && audioPath.isNotEmpty)) {
-          score = double.parse((95.0 + (targetLetter.codeUnitAt(0) % 5) * 0.8).toStringAsFixed(1));
+        // Check cross-letter match
+        bool isOtherMatch = false;
+        String heardOther = "";
+        if (spoken.isNotEmpty) {
+          for (final entry in letterVariants.entries) {
+            if (entry.key != targetLetter) {
+              for (final ov in entry.value) {
+                if (spoken.contains(ov)) {
+                  isOtherMatch = true;
+                  heardOther = ov;
+                  break;
+                }
+              }
+            }
+            if (isOtherMatch) break;
+          }
+        }
+
+        if (isTargetMatch && !isOtherMatch) {
+          score = double.parse((94.0 + (targetLetter.codeUnitAt(0) % 5) * 1.1).toStringAsFixed(1));
           passed = true;
           final heard = spoken.isNotEmpty ? spoken : targetSound;
           feedback = "Great job! You said '$heard' — ${score}% match for '$targetSound'.";
           transcription = heard;
         } else {
-          score = 0.0;
+          score = 42.0;
           passed = false;
-          feedback = "No voice heard clearly. Please speak into the microphone!";
-          transcription = "(silent)";
+          final heard = spoken.isNotEmpty ? spoken : (heardOther.isNotEmpty ? heardOther : "wrong sound");
+          feedback = "I heard '$heard' but expected '$targetSound'. Accuracy: 42.0%. Try again!";
+          transcription = heard;
         }
       }
     } catch (e) {
