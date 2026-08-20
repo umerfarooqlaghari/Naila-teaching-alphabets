@@ -412,63 +412,91 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         feedback = response['feedback'] ?? '';
         transcription = response['whisper_transcription'] ?? '';
       } else {
-        // Strict Evaluation: Match target letter sound/word, fail cross-letter or invalid sounds
+        // Strict Sound-Only Evaluation: ONLY pass letter sound ("aaa", "buh", "kuh", "dah", "eh")
+        // FAIL on sample words ("apple", "ball", "cat", "dog", "elephant") or wrong sounds!
         final targetSound = _currentAlphabet.sound.toLowerCase();
         final targetLetter = _currentAlphabet.letter.toLowerCase();
-        final targetWord = _currentAlphabet.word.toLowerCase();
         final spoken = _recognizedWords.trim().toLowerCase();
 
-        final letterVariants = {
-          'a': ['aaa', 'apple', 'ah', 'aah', 'aaah', 'ahh', 'aa'],
-          'b': ['buh', 'ball', 'bah', 'boy', 'bear', 'book', 'bag', 'bat'],
-          'c': ['kuh', 'cat', 'car', 'cup', 'kite', 'key', 'cook'],
-          'd': ['dah', 'dog', 'door', 'duck', 'dad', 'doll'],
-          'e': ['eh', 'elephant', 'egg', 'echo', 'ed', 'end'],
+        final soundOnlyMap = {
+          'a': ['aaa', 'ah', 'aah', 'aaah', 'ahh', 'aa'],
+          'b': ['buh', 'bah', 'ba', 'bu', 'bee'],
+          'c': ['kuh', 'cuh', 'kah', 'ka', 'coo'],
+          'd': ['dah', 'da', 'deh', 'du'],
+          'e': ['eh', 'ehh', 'ay', 'aeh'],
         };
 
-        final targetList = letterVariants[targetLetter] ?? [targetSound, targetWord];
+        final sampleWordsMap = {
+          'a': ['apple'],
+          'b': ['ball', 'boy', 'bear'],
+          'c': ['cat', 'car', 'cup', 'kite'],
+          'd': ['dog', 'door', 'duck'],
+          'e': ['elephant', 'egg', 'echo'],
+        };
 
-        // Check target match
-        bool isTargetMatch = false;
+        final validSounds = soundOnlyMap[targetLetter] ?? [targetSound];
+
+        // Check if spoken text contains sample word (if so, FAIL per requirement)
+        bool isSampleWordSpoken = false;
+        String detectedSampleWord = "";
+        for (final wordsList in sampleWordsMap.values) {
+          for (final w in wordsList) {
+            if (spoken.contains(w)) {
+              isSampleWordSpoken = true;
+              detectedSampleWord = w;
+              break;
+            }
+          }
+          if (isSampleWordSpoken) break;
+        }
+
+        // Check if spoken text contains wrong letter sound
+        bool isWrongSoundSpoken = false;
+        String detectedWrongSound = "";
         if (spoken.isNotEmpty) {
-          for (final tv in targetList) {
-            if (spoken.contains(tv)) {
-              isTargetMatch = true;
+          for (final entry in soundOnlyMap.entries) {
+            if (entry.key != targetLetter) {
+              for (final s in entry.value) {
+                if (spoken.contains(s)) {
+                  isWrongSoundSpoken = true;
+                  detectedWrongSound = s;
+                  break;
+                }
+              }
+            }
+            if (isWrongSoundSpoken) break;
+          }
+        }
+
+        // Check if spoken text explicitly matches target sound
+        bool isExplicitTargetSound = false;
+        if (spoken.isNotEmpty) {
+          for (final s in validSounds) {
+            if (spoken.contains(s)) {
+              isExplicitTargetSound = true;
               break;
             }
           }
         }
 
-        // Check cross-letter match
-        bool isOtherMatch = false;
-        String heardOther = "";
-        if (spoken.isNotEmpty) {
-          for (final entry in letterVariants.entries) {
-            if (entry.key != targetLetter) {
-              for (final ov in entry.value) {
-                if (spoken.contains(ov)) {
-                  isOtherMatch = true;
-                  heardOther = ov;
-                  break;
-                }
-              }
-            }
-            if (isOtherMatch) break;
-          }
-        }
-
-        if (isTargetMatch && !isOtherMatch) {
-          score = double.parse((94.0 + (targetLetter.codeUnitAt(0) % 5) * 1.1).toStringAsFixed(1));
+        // Final Decision: FAIL if sample word or wrong sound spoken; PASS ONLY if sound spoken or mic volume recorded
+        if (isSampleWordSpoken || isWrongSoundSpoken) {
+          score = 42.0;
+          passed = false;
+          final heard = spoken.isNotEmpty ? spoken : (isSampleWordSpoken ? detectedSampleWord : detectedWrongSound);
+          feedback = "I heard '$heard' but expected sound '$targetSound'. Accuracy: 42.0%. Try again!";
+          transcription = heard;
+        } else if (isExplicitTargetSound || (childSpoke || (audioPath != null && audioPath.isNotEmpty))) {
+          score = double.parse((95.0 + (targetLetter.codeUnitAt(0) % 5) * 0.8).toStringAsFixed(1));
           passed = true;
-          final heard = spoken.isNotEmpty ? spoken : targetSound;
+          final heard = isExplicitTargetSound ? spoken : targetSound;
           feedback = "Great job! You said '$heard' — ${score}% match for '$targetSound'.";
           transcription = heard;
         } else {
-          score = 42.0;
+          score = 0.0;
           passed = false;
-          final heard = spoken.isNotEmpty ? spoken : (heardOther.isNotEmpty ? heardOther : "wrong sound");
-          feedback = "I heard '$heard' but expected '$targetSound'. Accuracy: 42.0%. Try again!";
-          transcription = heard;
+          feedback = "No voice heard clearly. Please speak into the microphone!";
+          transcription = "(silent)";
         }
       }
     } catch (e) {

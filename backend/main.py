@@ -201,11 +201,11 @@ def get_whisper():
 PHONETIC_TARGET_WORDS = { "a": "aaa", "b": "buh", "c": "kuh", "d": "dah", "e": "eh" }
 IPA_REFERENCE_WORDS = { "a": "ah", "b": "buh", "c": "kuh", "d": "dah", "e": "eh" }
 PHONETIC_VARIANTS = {
-    "a": ["aaa", "apple", "ah", "aah", "aaah", "ahh", "aa"],
-    "b": ["buh", "ball", "bah", "boy", "bear", "book", "bag", "bat"],
-    "c": ["kuh", "cat", "car", "cup", "kite", "key", "cook"],
-    "d": ["dah", "dog", "door", "duck", "dad", "doll"],
-    "e": ["eh", "elephant", "egg", "echo", "ed", "end"],
+    "a": ["aaa", "ah", "aah", "aaah", "ahh", "aa"],
+    "b": ["buh", "bah", "ba", "bu", "bee"],
+    "c": ["kuh", "cuh", "kah", "ka", "coo"],
+    "d": ["dah", "da", "deh", "du"],
+    "e": ["eh", "ehh", "ay", "aeh"],
 }
 
 def text_to_ipa(word: str) -> str:
