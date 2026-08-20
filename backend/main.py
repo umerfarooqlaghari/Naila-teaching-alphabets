@@ -15,7 +15,8 @@ try:
     import imageio_ffmpeg, shutil
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     ffmpeg_dir = os.path.dirname(ffmpeg_exe)
-    target1 = os.path.join(ffmpeg_dir, "ffmpeg.exe")
+    target_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    target1 = os.path.join(ffmpeg_dir, target_name)
     if not os.path.exists(target1):
         try: shutil.copy(ffmpeg_exe, target1)
         except Exception: pass
