@@ -12,27 +12,26 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 from datetime import datetime
 
+_ffmpeg_initialized = False
+
 def setup_ffmpeg():
+    global _ffmpeg_initialized
+    if _ffmpeg_initialized: return
+    _ffmpeg_initialized = True
     try:
-        import imageio_ffmpeg, shutil
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        ffmpeg_dir = os.path.dirname(ffmpeg_exe)
-        target_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-        target1 = os.path.join(ffmpeg_dir, target_name)
-        if not os.path.exists(target1):
-            try: shutil.copy(ffmpeg_exe, target1)
-            except Exception: pass
-        sys_path = os.environ.get("PATH", "")
-        if ffmpeg_dir not in sys_path:
-            os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + sys_path
-        print(f"[FFmpeg Ready] Standalone FFmpeg loaded from: {ffmpeg_exe}")
+        if os.name == "nt":
+            import imageio_ffmpeg, shutil
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            ffmpeg_dir = os.path.dirname(ffmpeg_exe)
+            target1 = os.path.join(ffmpeg_dir, "ffmpeg.exe")
+            if not os.path.exists(target1):
+                try: shutil.copy(ffmpeg_exe, target1)
+                except Exception: pass
+            sys_path = os.environ.get("PATH", "")
+            if ffmpeg_dir not in sys_path:
+                os.environ["PATH"] = ffmpeg_dir + os.path.pathsep + sys_path
     except Exception as f_err:
         print(f"[FFmpeg Notice] {f_err}")
-
-try:
-    setup_ffmpeg()
-except Exception:
-    pass
 
 try:
     from pymongo import MongoClient
