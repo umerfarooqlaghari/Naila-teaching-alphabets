@@ -821,4 +821,5 @@ def _log_session(student, alphabet, spoken_sound, transcription, target_ipa, spo
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=True)
+    reload_flag = os.getenv("RELOAD", "false").lower() == "true"
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=reload_flag)
