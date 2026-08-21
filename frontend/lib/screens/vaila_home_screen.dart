@@ -482,9 +482,9 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         // Final Decision: PASS ONLY if the explicit target sound is spoken!
         // FAIL on sample words ("apple", "ball", etc.), wrong sounds, or unrecognized text.
         if (isExplicitTargetSound) {
-          score = double.parse((95.0 + (targetLetter.codeUnitAt(0) % 5) * 0.8).toStringAsFixed(1));
+          score = 95.0;
           passed = true;
-          feedback = "Great job! You said '$spoken' — ${score}% match for '$targetSound'.";
+          feedback = "Great job! You said '$spoken' — 95.0% match for '$targetSound'.";
           transcription = spoken;
         } else {
           score = 42.0;

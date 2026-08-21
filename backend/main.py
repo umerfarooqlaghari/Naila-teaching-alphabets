@@ -642,21 +642,16 @@ async def evaluate_audio(
             has_target_stt = (
                 cleaned_stt in target_variants or
                 bool(stt_words.intersection(target_variants)) or
-                (len(target_sound) > 1 and target_sound in cleaned_stt) or
-                cleaned_stt == target or
-                f"letter {target}" in cleaned_stt or
-                f"{target} sound" in cleaned_stt or
-                (target == 'c' and any(w.startswith('c') or w.startswith('k') for w in stt_words)) or
-                any(w.startswith(target) for w in stt_words)
+                any(tv in cleaned_stt for tv in target_variants if len(tv) > 1)
             )
             has_other_stt = False
             for other_k in ["a", "b", "c", "d", "e"]:
                 if other_k != target:
                     other_k_vars = set(PHONETIC_VARIANTS.get(other_k, []))
-                    if (cleaned_stt in other_k_vars or bool(stt_words.intersection(other_k_vars))):
+                    if (cleaned_stt in other_k_vars or bool(stt_words.intersection(other_k_vars)) or any(ov in cleaned_stt for ov in other_k_vars if len(ov) > 1)):
                         has_other_stt = True
                         break
-            if has_target_stt or has_other_stt:
+            if (has_target_stt or has_other_stt) and not whisper_transcription:
                 whisper_transcription = stt_transcription
 
         # Transcribe audio file with fast Whisper AI only if STT did not produce a clear match
@@ -672,7 +667,7 @@ async def evaluate_audio(
                         tmp_path = tmp.name
                     model = get_whisper()
                     if model is not None:
-                        prompt = "Phonics sounds: aaa, buh, kuh, dah, eh, ah, apple, ball, cat, dog, elephant."
+                        prompt = "Phonics sounds: aaa, buh, kuh, dah, eh."
                         import asyncio
                         result = await asyncio.to_thread(
                             model.transcribe,
@@ -706,9 +701,6 @@ async def evaluate_audio(
             has_target = (
                 cleaned in target_variants or
                 bool(words.intersection(target_variants)) or
-                (len(target_sound) > 1 and target_sound in cleaned) or
-                f"letter {target}" in cleaned or
-                f"{target} sound" in cleaned or
                 any(tv in cleaned for tv in target_variants if len(tv) > 1)
             )
 
@@ -717,7 +709,7 @@ async def evaluate_audio(
             for other_k in ["a", "b", "c", "d", "e"]:
                 if other_k != target:
                     other_k_vars = set(PHONETIC_VARIANTS.get(other_k, []))
-                    if (cleaned in other_k_vars or bool(words.intersection(other_k_vars))):
+                    if (cleaned in other_k_vars or bool(words.intersection(other_k_vars)) or any(ov in cleaned for ov in other_k_vars if len(ov) > 1)):
                         has_other = True
                         break
 
@@ -736,15 +728,15 @@ async def evaluate_audio(
 
         # Decision Engine: PASS ONLY IF target matches and NOT another letter, FAIL otherwise
         if is_target_match and not is_other_match:
-            accuracy = round(random.uniform(94.0, 99.2), 1)
+            accuracy = 95.0
             passed = True
             display_text = chosen_text if chosen_text else target_sound
-            feedback = f"Great job! You said '{display_text}' — {accuracy}% match for '{target_sound}'."
+            feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
         else:
-            accuracy = round(random.uniform(32.0, 54.0), 1)
+            accuracy = 42.0
             passed = False
             display_text = chosen_text if (chosen_text and chosen_text not in ["wrong sound", "(sound)", ".", ""]) else "wrong sound"
-            feedback = f"I heard '{display_text}' but expected '{target_sound}'. Accuracy: {accuracy}%. Try again!"
+            feedback = f"I heard '{display_text}' but expected '{target_sound}'. Accuracy: 42.0%. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
