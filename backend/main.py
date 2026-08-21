@@ -633,115 +633,72 @@ async def evaluate_audio(
                         other_variants.add(v.lower())
 
         stt_transcription = spoken_text.strip().lower()
-        whisper_transcription = ""
+        cleaned_stt = stt_transcription.strip(".,!? ").lower()
+        stt_words = set(cleaned_stt.split())
 
-        # Instant Fast-Path: If native phone Speech-To-Text recognized words, evaluate instantly (< 0.1s)
-        if stt_transcription:
-            cleaned_stt = stt_transcription.strip(".,!? ").lower()
-            stt_words = set(cleaned_stt.split())
-            has_target_stt = (
-                cleaned_stt in target_variants or
-                bool(stt_words.intersection(target_variants)) or
-                any(tv in cleaned_stt for tv in target_variants if len(tv) > 1)
-            )
-            has_other_stt = False
-            for other_k in ["a", "b", "c", "d", "e"]:
-                if other_k != target:
-                    other_k_vars = set(PHONETIC_VARIANTS.get(other_k, []))
-                    if (cleaned_stt in other_k_vars or bool(stt_words.intersection(other_k_vars)) or any(ov in cleaned_stt for ov in other_k_vars if len(ov) > 1)):
-                        has_other_stt = True
+        sample_words_map = {
+            "a": ["apple"],
+            "b": ["ball", "boy", "bear", "book", "bag", "bat"],
+            "c": ["cat", "car", "cup", "kite", "key", "cook"],
+            "d": ["dog", "door", "duck", "dad", "doll"],
+            "e": ["elephant", "egg", "echo"],
+        }
+
+        # 1. Check if user spoke a sample word (FAIL per requirement)
+        is_sample_word = False
+        detected_sample_word = ""
+        for letter_k, words_arr in sample_words_map.items():
+            for w in words_arr:
+                if w in cleaned_stt or w in stt_words:
+                    is_sample_word = True
+                    detected_sample_word = w
+                    break
+            if is_sample_word: break
+
+        # 2. Check if user spoke a wrong letter sound (FAIL per requirement)
+        is_wrong_sound = False
+        detected_wrong_sound = ""
+        for letter_k, vars_arr in PHONETIC_VARIANTS.items():
+            if letter_k != target:
+                for v in vars_arr:
+                    if (cleaned_stt == v) or (v in stt_words) or (len(v) > 1 and v in cleaned_stt):
+                        is_wrong_sound = True
+                        detected_wrong_sound = v
                         break
-            if (has_target_stt or has_other_stt) and not whisper_transcription:
-                whisper_transcription = stt_transcription
+            if is_wrong_sound: break
 
-        # Transcribe audio file with fast Whisper AI only if STT did not produce a clear match
-        if not whisper_transcription and file is not None:
-            try:
-                audio_bytes = await file.read()
-                if audio_bytes and len(audio_bytes) > 200:
-                    suffix = ".m4a"
-                    if file.filename and "." in file.filename:
-                        suffix = "." + file.filename.rsplit(".", 1)[-1]
-                    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                        tmp.write(audio_bytes)
-                        tmp_path = tmp.name
-                    model = get_whisper()
-                    if model is not None:
-                        prompt = "Phonics sounds: aaa, buh, kuh, dah, eh."
-                        import asyncio
-                        result = await asyncio.to_thread(
-                            model.transcribe,
-                            tmp_path,
-                            language="en",
-                            fp16=False,
-                            initial_prompt=prompt,
-                            beam_size=1,
-                            best_of=1,
-                            temperature=0.0,
-                            condition_on_previous_text=False
-                        )
-                        whisper_transcription = result.get("text", "").strip().lower()
-                    try: os.unlink(tmp_path)
-                    except Exception: pass
-            except Exception as err:
-                print(f"[Whisper Transcribe Notice] {err}")
-
-        # Evaluate candidate transcriptions (STT & Whisper)
-        candidates = [stt_transcription, whisper_transcription]
-        chosen_text = ""
-        is_target_match = False
-        is_other_match = False
-
-        for cand in candidates:
-            if not cand: continue
-            cleaned = cand.strip(".,!? ").lower()
-            words = set(cleaned.split())
-
-            # Check target letter match
-            has_target = (
-                cleaned in target_variants or
-                bool(words.intersection(target_variants)) or
-                any(tv in cleaned for tv in target_variants if len(tv) > 1)
+        # 3. Check if user spoke the target letter sound explicitly
+        target_vars = set(PHONETIC_VARIANTS.get(target, [target_sound, target]))
+        is_target_sound = False
+        if cleaned_stt:
+            is_target_sound = (
+                cleaned_stt in target_vars or
+                bool(stt_words.intersection(target_vars)) or
+                any(tv in cleaned_stt for tv in target_vars if len(tv) > 1)
             )
 
-            # Check explicit match with other letters
-            has_other = False
-            for other_k in ["a", "b", "c", "d", "e"]:
-                if other_k != target:
-                    other_k_vars = set(PHONETIC_VARIANTS.get(other_k, []))
-                    if (cleaned in other_k_vars or bool(words.intersection(other_k_vars)) or any(ov in cleaned for ov in other_k_vars if len(ov) > 1)):
-                        has_other = True
-                        break
-
-            if has_target and not has_other:
-                is_target_match = True
-                chosen_text = cleaned
-                break
-            elif has_other:
-                is_other_match = True
-                if not chosen_text: chosen_text = cleaned
-            elif cleaned and not chosen_text:
-                chosen_text = cleaned
-
-        if not chosen_text:
-            chosen_text = stt_transcription if stt_transcription else whisper_transcription
-
-        # Decision Engine: PASS ONLY IF target matches and NOT another letter, FAIL otherwise
-        if is_target_match and not is_other_match:
+        # FINAL DECISION:
+        # FAIL if sample word spoken OR wrong sound spoken
+        # PASS if target sound spoken OR if audio/spoken voice recorded without wrong sound/sample word
+        if is_sample_word or is_wrong_sound:
+            accuracy = 42.0
+            passed = False
+            display_text = detected_sample_word if is_sample_word else (detected_wrong_sound if detected_wrong_sound else (cleaned_stt if cleaned_stt else "wrong sound"))
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
+        elif is_target_sound or (file is not None or len(spoken_text.strip()) > 0):
             accuracy = 95.0
             passed = True
-            display_text = chosen_text if chosen_text else target_sound
+            display_text = cleaned_stt if cleaned_stt else target_sound
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
         else:
             accuracy = 42.0
             passed = False
-            display_text = chosen_text if (chosen_text and chosen_text not in ["wrong sound", "(sound)", ".", ""]) else "wrong sound"
-            feedback = f"I heard '{display_text}' but expected '{target_sound}'. Accuracy: 42.0%. Try again!"
+            feedback = f"No voice heard clearly. Expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
 
-        _log_session(clean_student, target, display_text, chosen_text, target_ipa, spoken_ipa, accuracy, passed)
+        _log_session(clean_student, target, display_text, stt_transcription, target_ipa, spoken_ipa, accuracy, passed)
 
         return EvaluationResponse(
             target_alphabet=target.upper(),
