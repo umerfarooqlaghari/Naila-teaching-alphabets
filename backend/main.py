@@ -636,15 +636,23 @@ async def evaluate_audio(
         cleaned_stt = stt_transcription.strip(".,!? ").lower()
         stt_words = set(cleaned_stt.split())
 
-        wrong_sounds_map = {
-            "a": ["buh", "kuh", "dah", "eh", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
-            "b": ["aaa", "kuh", "dah", "eh", "apple", "cat", "dog", "elephant", "car", "cup", "door", "duck"],
-            "c": ["aaa", "buh", "dah", "eh", "apple", "ball", "dog", "elephant", "boy", "bear", "door", "duck"],
-            "d": ["aaa", "buh", "kuh", "eh", "apple", "ball", "cat", "elephant", "boy", "bear", "car", "cup"],
-            "e": ["aaa", "buh", "kuh", "dah", "apple", "ball", "cat", "dog", "boy", "bear", "car", "cup", "door", "duck"],
+        target_sounds_map = {
+            "a": ["aaa", "ah", "aah", "aaah", "ahh", "aa", "a"],
+            "b": ["buh", "bah", "ba", "bu", "bee", "b"],
+            "c": ["kuh", "cuh", "kah", "ka", "coo", "c", "k"],
+            "d": ["dah", "da", "deh", "du", "d"],
+            "e": ["eh", "ehh", "ay", "aeh", "e"],
         }
 
-        # Check if user explicitly spoke a wrong letter sound or sample word
+        wrong_sounds_map = {
+            "a": ["buh", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
+            "b": ["aaa", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "car", "cup", "door", "duck"],
+            "c": ["aaa", "buh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "door", "duck"],
+            "d": ["aaa", "buh", "kuh", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup"],
+            "e": ["aaa", "buh", "kuh", "dah", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
+        }
+
+        # 1. Check explicit wrong letter sound or sample word
         is_explicit_wrong = False
         detected_wrong = ""
         if cleaned_stt:
@@ -655,26 +663,36 @@ async def evaluate_audio(
                     detected_wrong = w
                     break
 
-        has_audio_input = (file is not None) or (len(spoken_text.strip()) > 0)
+        # 2. Check explicit target letter sound match
+        is_target_match = False
+        if cleaned_stt:
+            valid_targets = target_sounds_map.get(target, [target_sound])
+            for t in valid_targets:
+                if t == cleaned_stt or t in stt_words or (len(t) > 1 and t in cleaned_stt):
+                    is_target_match = True
+                    break
 
-        # DECISION:
-        # FAIL if user explicitly spoke a wrong letter sound or sample word
-        # PASS if user recorded voice/audio for target letter without wrong sounds
+        # STRICT BACKEND DECISION:
         if is_explicit_wrong:
             accuracy = 42.0
             passed = False
             display_text = detected_wrong
             feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
-        elif has_audio_input:
+        elif is_target_match:
             accuracy = 95.0
             passed = True
-            display_text = cleaned_stt if cleaned_stt else target_sound
+            display_text = cleaned_stt
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
+        elif not cleaned_stt:
+            accuracy = 0.0
+            passed = False
+            display_text = "(silent)"
+            feedback = f"No voice heard. Please speak sound '{target_sound}' into the microphone!"
         else:
             accuracy = 42.0
             passed = False
-            display_text = "wrong sound"
-            feedback = f"No voice heard clearly. Expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
+            display_text = cleaned_stt
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)

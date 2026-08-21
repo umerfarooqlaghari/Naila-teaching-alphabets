@@ -400,10 +400,6 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     String transcription = '';
 
     try {
-      if (!childSpoke && (audioPath == null || audioPath.isEmpty)) {
-        throw Exception('silence');
-      }
-
       final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
 
       if (response != null) {
@@ -412,57 +408,16 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         feedback = response['feedback'] ?? '';
         transcription = response['whisper_transcription'] ?? '';
       } else {
-        // Strict Sound-Only Evaluation: ONLY pass letter sound ("aaa", "buh", "kuh", "dah", "eh")
-        // FAIL on sample words ("apple", "ball", "cat", "dog", "elephant") or wrong sounds!
-        final targetSound = _currentAlphabet.sound.toLowerCase();
-        final targetLetter = _currentAlphabet.letter.toLowerCase();
-        final spoken = _recognizedWords.trim().toLowerCase();
-
-        final wrongSoundsMap = {
-          'a': ['buh', 'kuh', 'dah', 'eh', 'apple', 'ball', 'cat', 'dog', 'elephant', 'boy', 'bear', 'car', 'cup', 'door', 'duck'],
-          'b': ['aaa', 'kuh', 'dah', 'eh', 'apple', 'ball', 'cat', 'dog', 'elephant', 'car', 'cup', 'door', 'duck'],
-          'c': ['aaa', 'buh', 'dah', 'eh', 'apple', 'ball', 'cat', 'dog', 'elephant', 'boy', 'bear', 'door', 'duck'],
-          'd': ['aaa', 'buh', 'kuh', 'eh', 'apple', 'ball', 'cat', 'dog', 'elephant', 'boy', 'bear', 'car', 'cup'],
-          'e': ['aaa', 'buh', 'kuh', 'dah', 'apple', 'ball', 'cat', 'dog', 'elephant', 'boy', 'bear', 'car', 'cup', 'door', 'duck'],
-        };
-
-        bool isWrongSoundSpoken = false;
-        String detectedWrong = "";
-        if (spoken.isNotEmpty) {
-          final wrongList = wrongSoundsMap[targetLetter] ?? [];
-          for (final w in wrongList) {
-            if (spoken.contains(w)) {
-              isWrongSoundSpoken = true;
-              detectedWrong = w;
-              break;
-            }
-          }
-        }
-
-        if (isWrongSoundSpoken) {
-          score = 42.0;
-          passed = false;
-          final heard = spoken.isNotEmpty ? spoken : detectedWrong;
-          feedback = "I heard '$heard' but expected sound '$targetSound'. Accuracy: 42.0%. Try again!";
-          transcription = heard;
-        } else if (childSpoke || (audioPath != null && audioPath.isNotEmpty)) {
-          score = 95.0;
-          passed = true;
-          final heard = spoken.isNotEmpty ? spoken : targetSound;
-          feedback = "Great job! You said '$heard' — 95.0% match for '$targetSound'.";
-          transcription = heard;
-        } else {
-          score = 42.0;
-          passed = false;
-          feedback = "No voice heard clearly. Expected sound '$targetSound'. Accuracy: 42.0%. Try again!";
-          transcription = "wrong sound";
-        }
+        score = 0.0;
+        passed = false;
+        feedback = "Evaluation notice: Unable to connect to server. Please try again!";
+        transcription = "(server connection error)";
       }
     } catch (e) {
       score = 0.0;
       passed = false;
-      feedback = "Speech evaluation notice: Please speak clearly into the microphone and try again!";
-      transcription = "wrong sound";
+      feedback = "Please speak clearly into the microphone and try again!";
+      transcription = "(error)";
     }
 
     if (!mounted) return;
