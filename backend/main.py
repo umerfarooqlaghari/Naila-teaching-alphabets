@@ -636,35 +636,45 @@ async def evaluate_audio(
         cleaned_stt = stt_transcription.strip(".,!? ").lower()
         stt_words = set(cleaned_stt.split())
 
-        sound_only_variants = {
-            "a": ["aaa", "ah", "aah", "aaah", "ahh", "aa"],
-            "b": ["buh", "bah", "ba", "bu", "bee"],
-            "c": ["kuh", "cuh", "kah", "ka", "coo"],
-            "d": ["dah", "da", "deh", "du"],
-            "e": ["eh", "ehh", "ay", "aeh"],
+        wrong_sounds_map = {
+            "a": ["buh", "kuh", "dah", "eh", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
+            "b": ["aaa", "kuh", "dah", "eh", "apple", "cat", "dog", "elephant", "car", "cup", "door", "duck"],
+            "c": ["aaa", "buh", "dah", "eh", "apple", "ball", "dog", "elephant", "boy", "bear", "door", "duck"],
+            "d": ["aaa", "buh", "kuh", "eh", "apple", "ball", "cat", "elephant", "boy", "bear", "car", "cup"],
+            "e": ["aaa", "buh", "kuh", "dah", "apple", "ball", "cat", "dog", "boy", "bear", "car", "cup", "door", "duck"],
         }
 
-        target_sounds = sound_only_variants.get(target, [target_sound])
-
-        # Check if spoken text matches target letter sound explicitly
-        is_exact_sound_match = False
+        # Check if user explicitly spoke a wrong letter sound or sample word
+        is_explicit_wrong = False
+        detected_wrong = ""
         if cleaned_stt:
-            for s in target_sounds:
-                if s == cleaned_stt or s in stt_words or (len(s) > 1 and s in cleaned_stt):
-                    is_exact_sound_match = True
+            wrong_list = wrong_sounds_map.get(target, [])
+            for w in wrong_list:
+                if w == cleaned_stt or w in stt_words or (len(w) > 1 and w in cleaned_stt):
+                    is_explicit_wrong = True
+                    detected_wrong = w
                     break
 
-        # STRICT RULE: PASS ONLY IF spoken text matches target sound! FAIL EVERYTHING ELSE!
-        if is_exact_sound_match:
+        has_audio_input = (file is not None) or (len(spoken_text.strip()) > 0)
+
+        # DECISION:
+        # FAIL if user explicitly spoke a wrong letter sound or sample word
+        # PASS if user recorded voice/audio for target letter without wrong sounds
+        if is_explicit_wrong:
+            accuracy = 42.0
+            passed = False
+            display_text = detected_wrong
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
+        elif has_audio_input:
             accuracy = 95.0
             passed = True
-            display_text = cleaned_stt
+            display_text = cleaned_stt if cleaned_stt else target_sound
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
         else:
             accuracy = 42.0
             passed = False
-            display_text = cleaned_stt if cleaned_stt else "wrong sound"
-            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
+            display_text = "wrong sound"
+            feedback = f"No voice heard clearly. Expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
