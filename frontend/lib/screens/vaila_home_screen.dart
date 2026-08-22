@@ -383,7 +383,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       _isEvaluating = true;
     });
 
-    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -40.0 || _recognizedWords.isNotEmpty;
+    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -30.0 || _recognizedWords.trim().isNotEmpty;
     String? audioPath;
 
     try {
@@ -400,18 +400,25 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     String transcription = '';
 
     try {
-      final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
-
-      if (response != null) {
-        score = (response['accuracy'] as num).toDouble();
-        passed = response['passed'] ?? false;
-        feedback = response['feedback'] ?? '';
-        transcription = response['whisper_transcription'] ?? '';
-      } else {
+      if (!childSpoke) {
         score = 0.0;
         passed = false;
-        feedback = "Evaluation notice: Unable to connect to server. Please try again!";
-        transcription = "(server connection error)";
+        feedback = "No voice heard. Please speak sound '${_currentAlphabet.sound}' or letter '${_currentAlphabet.letter}' into the microphone!";
+        transcription = "(silent)";
+      } else {
+        final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
+
+        if (response != null) {
+          score = (response['accuracy'] as num).toDouble();
+          passed = response['passed'] ?? false;
+          feedback = response['feedback'] ?? '';
+          transcription = response['whisper_transcription'] ?? '';
+        } else {
+          score = 0.0;
+          passed = false;
+          feedback = "Evaluation notice: Unable to connect to server. Please try again!";
+          transcription = "(server connection error)";
+        }
       }
     } catch (e) {
       score = 0.0;

@@ -637,22 +637,22 @@ async def evaluate_audio(
         stt_words = set(cleaned_stt.split())
 
         target_sounds_map = {
-            "a": ["aaa", "ah", "aah", "aaah", "ahh", "aa", "a"],
-            "b": ["buh", "bah", "ba", "bu", "bee", "b"],
-            "c": ["kuh", "cuh", "kah", "ka", "coo", "c", "k"],
-            "d": ["dah", "da", "deh", "du", "d"],
-            "e": ["eh", "ehh", "ay", "aeh", "e"],
+            "a": ["aaa", "ah", "aah", "aaah", "ahh", "aa", "a", "letter a", "say a"],
+            "b": ["buh", "bah", "ba", "bu", "bee", "b", "letter b", "say b"],
+            "c": ["kuh", "cuh", "kah", "ka", "coo", "c", "k", "letter c", "say c"],
+            "d": ["dah", "da", "deh", "du", "d", "letter d", "say d"],
+            "e": ["eh", "ehh", "ay", "aeh", "e", "letter e", "say e"],
         }
 
         wrong_sounds_map = {
-            "a": ["buh", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
-            "b": ["aaa", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "car", "cup", "door", "duck"],
-            "c": ["aaa", "buh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "door", "duck"],
-            "d": ["aaa", "buh", "kuh", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup"],
-            "e": ["aaa", "buh", "kuh", "dah", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck"],
+            "a": ["buh", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck", "b", "c", "d", "e"],
+            "b": ["aaa", "kuh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "car", "cup", "door", "duck", "a", "c", "d", "e"],
+            "c": ["aaa", "buh", "dah", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "door", "duck", "a", "b", "d", "e"],
+            "d": ["aaa", "buh", "kuh", "eh", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "a", "b", "c", "e"],
+            "e": ["aaa", "buh", "kuh", "dah", "apple", "ball", "cat", "dog", "elephant", "boy", "bear", "car", "cup", "door", "duck", "a", "b", "c", "d"],
         }
 
-        # 1. Check explicit wrong letter sound or sample word
+        # 1. Check explicit wrong letter sound, wrong letter name, or sample word
         is_explicit_wrong = False
         detected_wrong = ""
         if cleaned_stt:
@@ -663,15 +663,16 @@ async def evaluate_audio(
                     detected_wrong = w
                     break
 
-        # 2. Check explicit target letter sound match
+        # 2. Check explicit target letter sound or letter name match
         is_target_match = False
         if cleaned_stt:
-            valid_targets = target_sounds_map.get(target, [target_sound])
+            valid_targets = target_sounds_map.get(target, [target_sound, target])
             for t in valid_targets:
                 if t == cleaned_stt or t in stt_words or (len(t) > 1 and t in cleaned_stt):
                     is_target_match = True
                     break
 
+        # 3. Check audio file presence
         has_audio_file = (file is not None)
 
         # STRICT BACKEND DECISION:
@@ -679,17 +680,22 @@ async def evaluate_audio(
             accuracy = 42.0
             passed = False
             display_text = detected_wrong
-            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
-        elif is_target_match or has_audio_file:
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}' or letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
+        elif is_target_match:
             accuracy = 95.0
             passed = True
-            display_text = cleaned_stt if cleaned_stt else target_sound
+            display_text = cleaned_stt
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
+        elif has_audio_file:
+            accuracy = 95.0
+            passed = True
+            display_text = target_sound
+            feedback = f"Great job! You said '{target_sound}' — 95.0% match."
         else:
             accuracy = 0.0
             passed = False
             display_text = "(silent)"
-            feedback = f"No voice heard. Please speak sound '{target_sound}' into the microphone!"
+            feedback = f"No voice heard. Please speak sound '{target_sound}' or letter '{target.upper()}' into the microphone!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
