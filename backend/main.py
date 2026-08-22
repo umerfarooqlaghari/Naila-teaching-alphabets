@@ -672,10 +672,7 @@ async def evaluate_audio(
                     is_target_match = True
                     break
 
-        # 3. Check audio file presence
-        has_audio_file = (file is not None)
-
-        # STRICT BACKEND DECISION:
+        # STRICT BACKEND DECISION: PASS ONLY IF TARGET MATCHES, FAIL EVERYTHING ELSE!
         if is_explicit_wrong:
             accuracy = 42.0
             passed = False
@@ -686,16 +683,11 @@ async def evaluate_audio(
             passed = True
             display_text = cleaned_stt
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
-        elif has_audio_file:
-            accuracy = 95.0
-            passed = True
-            display_text = target_sound
-            feedback = f"Great job! You said '{target_sound}' — 95.0% match."
         else:
-            accuracy = 0.0
+            accuracy = 42.0
             passed = False
-            display_text = "(silent)"
-            feedback = f"No voice heard. Please speak sound '{target_sound}' or letter '{target.upper()}' into the microphone!"
+            display_text = cleaned_stt if cleaned_stt else "wrong sound"
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}' or letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
