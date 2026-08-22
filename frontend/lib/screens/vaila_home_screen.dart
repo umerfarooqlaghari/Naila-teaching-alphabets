@@ -383,7 +383,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       _isEvaluating = true;
     });
 
-    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -30.0 || _recognizedWords.trim().isNotEmpty;
+    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -50.0 || _recognizedWords.trim().isNotEmpty;
     String? audioPath;
 
     try {
