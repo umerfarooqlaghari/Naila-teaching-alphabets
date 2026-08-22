@@ -312,6 +312,12 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceDetectedFlag = false;
     _pulseController.repeat(reverse: true);
 
+    if (!_speechToTextAvailable) {
+      try {
+        _speechToTextAvailable = await _speechToText.initialize();
+      } catch (_) {}
+    }
+
     if (_speechToTextAvailable) {
       try {
         await _speechToText.listen(
