@@ -319,6 +319,10 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
             if (mounted) {
               setState(() {
                 _recognizedWords = result.recognizedWords;
+                if (_recognizedWords.trim().isNotEmpty) {
+                  _voiceDetected = true;
+                  _voiceDetectedFlag = true;
+                }
               });
             }
           },
@@ -329,26 +333,6 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       } catch (e) {
         print('STT listen error: $e');
       }
-    }
-
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        String path = '';
-        if (!kIsWeb) {
-          final tempDir = await getTemporaryDirectory();
-          path = '${tempDir.path}/pronunciation_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        }
-
-        final config = RecordConfig(
-          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
-          sampleRate: 44100,
-          numChannels: 1,
-        );
-
-        await _audioRecorder.start(config, path: path);
-      }
-    } catch (e) {
-      print('Recording error: $e');
     }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -383,16 +367,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       _isEvaluating = true;
     });
 
-    final bool childSpoke = _voiceDetectedFlag || _peakVolumeDb > -50.0 || _recognizedWords.trim().isNotEmpty;
-    String? audioPath;
-
-    try {
-      if (await _audioRecorder.isRecording()) {
-        audioPath = await _audioRecorder.stop();
-      }
-    } catch (e) {
-      print('Stop recording exception: $e');
-    }
+    final bool childSpoke = _recognizedWords.trim().isNotEmpty || _voiceDetectedFlag;
 
     double score = 0;
     bool passed = false;
@@ -403,10 +378,10 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       if (!childSpoke) {
         score = 0.0;
         passed = false;
-        feedback = "No voice heard. Please speak sound '${_currentAlphabet.sound}' or letter '${_currentAlphabet.letter}' into the microphone!";
+        feedback = "No voice heard. Please speak letter '${_currentAlphabet.sound}' into the microphone!";
         transcription = "(silent)";
       } else {
-        final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
+        final response = await _sendToBackend('', _currentAlphabet.letter, _recognizedWords);
 
         if (response != null) {
           score = (response['accuracy'] as num).toDouble();
