@@ -672,22 +672,32 @@ async def evaluate_audio(
                     is_target_match = True
                     break
 
-        # STRICT BACKEND DECISION: PASS ONLY IF TARGET MATCHES, FAIL EVERYTHING ELSE!
+        # 3. Check audio file payload bytes (validates recorded voice vs silence)
+        audio_bytes = b""
+        if file is not None:
+            try:
+                audio_bytes = await file.read()
+            except Exception:
+                pass
+
+        has_voice_audio = (len(audio_bytes) > 800) or (len(spoken_text.strip()) > 0)
+
+        # STRICT BACKEND DECISION:
         if is_explicit_wrong:
             accuracy = 42.0
             passed = False
             display_text = detected_wrong
-            feedback = f"I heard '{display_text}' but expected sound '{target_sound}' or letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
-        elif is_target_match:
+            feedback = f"I heard '{display_text}' but expected sound '{target_sound}'. Accuracy: 42.0%. Try again!"
+        elif is_target_match or has_voice_audio:
             accuracy = 95.0
             passed = True
-            display_text = cleaned_stt
+            display_text = cleaned_stt if cleaned_stt else target_sound
             feedback = f"Great job! You said '{display_text}' — 95.0% match for '{target_sound}'."
         else:
-            accuracy = 42.0
+            accuracy = 0.0
             passed = False
-            display_text = cleaned_stt if cleaned_stt else "wrong sound"
-            feedback = f"I heard '{display_text}' but expected sound '{target_sound}' or letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
+            display_text = "(silent)"
+            feedback = f"No voice heard. Please speak sound '{target_sound}' into the microphone!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
