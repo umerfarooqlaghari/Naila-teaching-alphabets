@@ -253,11 +253,10 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     if (!mounted) return;
     setState(() {
       _isSpeaking3x = false;
+      if (!_cancelTtsLoop) {
+        _isReadyToSpeak = true;
+      }
     });
-
-    if (!_cancelTtsLoop) {
-      _startDetectionWindow();
-    }
   }
 
   void _startDetectionWindow() async {
@@ -274,7 +273,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     setState(() {
       _isReadyToSpeak = false;
       _isListeningWindow = true;
-      _timeLeft = 4;
+      _timeLeft = 5;
       _evalResult = null;
       _voiceDetected = false;
       _isEvaluating = false;
