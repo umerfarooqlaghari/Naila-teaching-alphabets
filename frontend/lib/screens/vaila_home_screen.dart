@@ -344,6 +344,9 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceStopTimer?.cancel();
     _pulseController.stop();
 
+    // Give Google Speech Recognizer 450ms to flush final buffer results to _recognizedWords
+    await Future.delayed(const Duration(milliseconds: 450));
+
     try {
       if (_speechToText.isListening) {
         await _speechToText.stop();
