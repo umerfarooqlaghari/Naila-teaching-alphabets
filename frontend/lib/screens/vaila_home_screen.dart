@@ -334,6 +334,26 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       }
     }
 
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        String path = '';
+        if (!kIsWeb) {
+          final tempDir = await getTemporaryDirectory();
+          path = '${tempDir.path}/pronunciation_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+
+        final config = RecordConfig(
+          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
+          sampleRate: 44100,
+          numChannels: 1,
+        );
+
+        await _audioRecorder.start(config, path: path);
+      }
+    } catch (e) {
+      print('Recording start exception: $e');
+    }
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeLeft > 1) {
         if (mounted) {
@@ -360,6 +380,15 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       }
     } catch (_) {}
 
+    String? audioPath;
+    try {
+      if (await _audioRecorder.isRecording()) {
+        audioPath = await _audioRecorder.stop();
+      }
+    } catch (e) {
+      print('Recording stop exception: $e');
+    }
+
     if (!mounted) return;
     setState(() {
       _isListeningWindow = false;
@@ -372,7 +401,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     String transcription = '';
 
     try {
-      final response = await _sendToBackend('', _currentAlphabet.letter, _recognizedWords);
+      final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
 
       if (response != null) {
         score = (response['accuracy'] as num).toDouble();
