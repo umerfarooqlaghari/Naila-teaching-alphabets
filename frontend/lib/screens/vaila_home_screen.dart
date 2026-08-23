@@ -352,7 +352,12 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
           listenMode: stt.ListenMode.dictation,
           cancelOnError: false,
         );
-      try {
+      } catch (e) {
+        print('STT listen error: $e');
+      }
+    }
+
+    try {
       if (await _audioRecorder.hasPermission()) {
         String path = '';
         if (!kIsWeb) {
