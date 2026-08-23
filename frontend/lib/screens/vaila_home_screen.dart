@@ -815,8 +815,14 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              _voiceDetected ? "Voice Heard! Processing..." : "Waiting for your voice...",
-              style: GoogleFonts.outfit(color: _voiceDetected ? const Color(0xFF10B981) : const Color(0xFF94A3B8), fontSize: 12),
+              _recognizedWords.trim().isNotEmpty
+                  ? 'Heard: "${_recognizedWords.toUpperCase()}" 🎤'
+                  : 'Waiting for your voice...',
+              style: GoogleFonts.outfit(
+                color: _recognizedWords.trim().isNotEmpty ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
