@@ -196,7 +196,24 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
   }
 
   void _initAudioStream() {
-    // Amplitude listener disabled to prevent mic initialization clicks from triggering false voice detection
+    try {
+      _amplitudeSubscription = _audioRecorder
+          .onAmplitudeChanged(const Duration(milliseconds: 100))
+          .listen((amp) {
+        if (!_isListeningWindow || _voiceDetectedFlag) return;
+        final db = amp.current;
+
+        const double speechThresholdDb = -34.0;
+        if (db > speechThresholdDb && !_voiceDetectedFlag) {
+          _voiceDetectedFlag = true;
+          if (mounted) {
+            setState(() {
+              _voiceDetected = true;
+            });
+          }
+        }
+      });
+    } catch (_) {}
   }
 
   @override
@@ -212,60 +229,35 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     super.dispose();
   }
 
-  void _triggerShake() async {
-    try {
-      if (await Vibration.hasVibrator() ?? false) {
-        Vibration.vibrate(duration: 400);
-      }
-    } catch (_) {}
-    _shakeController.forward(from: 0.0);
+  void _triggerShake() {
+    _shakeController.forward(from: 0);
   }
 
-  void _speakPhoneticSound3Times([VoidCallback? onDone]) async {
-    if (_isSpeaking3x) return;
+  void _speakPhoneticSound3Times() async {
+    if (_isSpeaking3x || _isListeningWindow || _isEvaluating) return;
+
     _cancelTtsLoop = false;
+    setState(() {
+      _isSpeaking3x = true;
+      _evalResult = null;
+    });
+
+    final soundToSpeak = _currentAlphabet.sound;
+
+    for (int i = 0; i < 3; i++) {
+      if (_cancelTtsLoop || !mounted) break;
+      await _flutterTts.speak(soundToSpeak);
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
 
     if (!mounted) return;
     setState(() {
-      _isSpeaking3x = true;
-      _isReadyToSpeak = false;
-      _isListeningWindow = false;
-      _evalResult = null;
-      _voiceDetected = false;
-    });
-
-    try {
-      await _flutterTts.stop();
-    } catch (_) {}
-
-    for (int i = 1; i <= 3; i++) {
-      if (!mounted || _cancelTtsLoop) return;
-      setState(() {
-        _speechCount = i;
-      });
-
-      try {
-        _flutterTts.speak(_currentAlphabet.speechText);
-      } catch (_) {}
-
-      await Future.delayed(const Duration(milliseconds: 1400));
-    }
-
-    try {
-      await _flutterTts.stop();
-    } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 350));
-
-    if (!mounted || _cancelTtsLoop) return;
-    setState(() {
       _isSpeaking3x = false;
-      _speechCount = 0;
-      if (onDone != null) {
-        onDone();
-      } else {
-        _isReadyToSpeak = true;
-      }
     });
+
+    if (!_cancelTtsLoop) {
+      _startDetectionWindow();
+    }
   }
 
   void _startDetectionWindow() async {
@@ -275,64 +267,22 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     try {
       await _flutterTts.stop();
     } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 250));
+    await Future.delayed(const Duration(milliseconds: 350));
 
     if (!mounted) return;
 
     setState(() {
       _isReadyToSpeak = false;
       _isListeningWindow = true;
-      _timeLeft = 5;
+      _timeLeft = 4;
       _evalResult = null;
       _voiceDetected = false;
       _isEvaluating = false;
       _recognizedWords = '';
     });
 
-    _peakVolumeDb = -160.0;
     _voiceDetectedFlag = false;
     _pulseController.repeat(reverse: true);
-
-    if (!_speechToTextAvailable) {
-      try {
-        _speechToTextAvailable = await _speechToText.initialize(
-          onError: (err) => print('STT init error: $err'),
-          onStatus: (status) => print('STT status: $status'),
-        );
-      } catch (_) {}
-    }
-
-    if (_speechToTextAvailable) {
-      try {
-        await _speechToText.listen(
-          onResult: (result) {
-            if (mounted) {
-              setState(() {
-                _recognizedWords = result.recognizedWords;
-                if (_recognizedWords.trim().isNotEmpty) {
-                  _voiceDetected = true;
-                  _voiceDetectedFlag = true;
-
-                  // FAST FINISH: Trigger evaluation in 400ms as soon as speech is uttered!
-                  _voiceStopTimer?.cancel();
-                  _voiceStopTimer = Timer(const Duration(milliseconds: 400), () {
-                    _finishDetectionWindow();
-                  });
-                }
-              });
-            }
-          },
-          listenFor: const Duration(seconds: 5),
-          pauseFor: const Duration(seconds: 2),
-          partialResults: true,
-          localeId: 'en_US',
-          listenMode: stt.ListenMode.dictation,
-          cancelOnError: false,
-        );
-      } catch (e) {
-        print('STT listen error: $e');
-      }
-    }
 
     try {
       if (await _audioRecorder.hasPermission()) {
