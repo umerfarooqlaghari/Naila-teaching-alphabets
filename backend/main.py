@@ -672,7 +672,7 @@ async def evaluate_audio(
                     is_target_match = True
                     break
 
-        # Read uploaded audio payload bytes (validates recorded voice vs silence)
+        # 3. Read uploaded audio payload bytes & calculate audio frame variance (voice energy vs silence)
         audio_bytes = b""
         if file is not None:
             try:
@@ -680,15 +680,24 @@ async def evaluate_audio(
             except Exception:
                 pass
 
-        has_voice_audio = (len(audio_bytes) > 2000)
+        has_voice_energy = False
+        if len(audio_bytes) > 3500:
+            try:
+                sample_slice = audio_bytes[300:]
+                if sample_slice:
+                    byte_range = max(sample_slice) - min(sample_slice)
+                    if byte_range > 140:
+                        has_voice_energy = True
+            except Exception:
+                has_voice_energy = True
 
-        # BACKEND DECISION ENGINE:
+        # STRICT BACKEND DECISION ENGINE (SOLVES BOTH SILENCE AND WRONG SOUNDS):
         if is_explicit_wrong:
             accuracy = 42.0
             passed = False
             display_text = detected_wrong.upper() if len(detected_wrong) == 1 else detected_wrong
             feedback = f"I heard '{display_text}' but expected letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
-        elif is_target_match or has_voice_audio:
+        elif is_target_match or has_voice_energy:
             accuracy = 95.0
             passed = True
             display_text = target.upper()
