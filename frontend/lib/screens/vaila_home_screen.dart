@@ -299,6 +299,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         );
 
         await _audioRecorder.start(config, path: path);
+        _initAudioStream();
       }
     } catch (e) {
       print('Recording start exception: $e');
@@ -794,11 +795,11 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              _recognizedWords.trim().isNotEmpty
-                  ? 'Heard: "${_recognizedWords.toUpperCase()}" 🎤'
-                  : 'Waiting for your voice...',
+              (_voiceDetected || _recognizedWords.trim().isNotEmpty)
+                  ? "Voice Heard! Recording... 🎤"
+                  : "Waiting for your voice...",
               style: GoogleFonts.outfit(
-                color: _recognizedWords.trim().isNotEmpty ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                color: (_voiceDetected || _recognizedWords.trim().isNotEmpty) ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
