@@ -328,13 +328,19 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
                 if (_recognizedWords.trim().isNotEmpty) {
                   _voiceDetected = true;
                   _voiceDetectedFlag = true;
+
+                  // FAST FINISH: Trigger evaluation in 400ms as soon as speech is uttered!
+                  _voiceStopTimer?.cancel();
+                  _voiceStopTimer = Timer(const Duration(milliseconds: 400), () {
+                    _finishDetectionWindow();
+                  });
                 }
               });
             }
           },
           partialResults: true,
-          listenFor: const Duration(seconds: 6),
-          pauseFor: const Duration(seconds: 3),
+          listenFor: const Duration(seconds: 5),
+          pauseFor: const Duration(seconds: 1),
         );
       } catch (e) {
         print('STT listen error: $e');
@@ -426,9 +432,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
   }
 
   Future<Map<String, dynamic>?> _sendToBackend(String audioPath, String targetLetter, String spokenText) async {
-    final urls = kIsWeb
-        ? ['https://naila-teaching-alphabets.onrender.com', 'http://127.0.0.1:8000', 'http://localhost:8000']
-        : ['https://naila-teaching-alphabets.onrender.com', 'http://10.0.2.2:8000', 'http://127.0.0.1:8000', 'http://localhost:8000'];
+    final urls = ['https://naila-teaching-alphabets.onrender.com'];
 
     for (final baseUrl in urls) {
       try {
@@ -438,30 +442,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         request.fields['spoken_text'] = spokenText;
         request.fields['student_id'] = _studentName;
 
-        if (audioPath.isNotEmpty) {
-          if (kIsWeb) {
-            try {
-              if (audioPath.startsWith('http') || audioPath.startsWith('blob:')) {
-                final res = await http.get(Uri.parse(audioPath)).timeout(const Duration(milliseconds: 2500));
-                if ((res.statusCode == 200 || res.statusCode == 0) && res.bodyBytes.isNotEmpty) {
-                  request.files.add(
-                    http.MultipartFile.fromBytes('file', res.bodyBytes, filename: 'pronunciation.wav'),
-                  );
-                }
-              }
-            } catch (e) {
-              print('Web blob fetch notice: $e');
-            }
-          } else {
-            try {
-              request.files.add(
-                await http.MultipartFile.fromPath('file', audioPath),
-              );
-            } catch (_) {}
-          }
-        }
-
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 6));
         final response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode == 200) {
