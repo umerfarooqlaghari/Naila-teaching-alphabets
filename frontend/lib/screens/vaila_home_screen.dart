@@ -274,6 +274,11 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       await Future.delayed(const Duration(milliseconds: 1400));
     }
 
+    try {
+      await _flutterTts.stop();
+    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 350));
+
     if (!mounted || _cancelTtsLoop) return;
     setState(() {
       _isSpeaking3x = false;
@@ -291,10 +296,9 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceStopTimer?.cancel();
 
     try {
-      if (await _audioRecorder.isRecording()) {
-        await _audioRecorder.stop();
-      }
+      await _flutterTts.stop();
     } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 250));
 
     if (!mounted) return;
 
@@ -314,7 +318,10 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
 
     if (!_speechToTextAvailable) {
       try {
-        _speechToTextAvailable = await _speechToText.initialize();
+        _speechToTextAvailable = await _speechToText.initialize(
+          onError: (err) => print('STT init error: $err'),
+          onStatus: (status) => print('STT status: $status'),
+        );
       } catch (_) {}
     }
 
@@ -338,9 +345,12 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
               });
             }
           },
-          partialResults: true,
           listenFor: const Duration(seconds: 5),
-          pauseFor: const Duration(seconds: 1),
+          pauseFor: const Duration(seconds: 2),
+          partialResults: true,
+          localeId: 'en_US',
+          listenMode: stt.ListenMode.dictation,
+          cancelOnError: false,
         );
       } catch (e) {
         print('STT listen error: $e');
