@@ -196,30 +196,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
   }
 
   void _initAudioStream() {
-    try {
-      _amplitudeSubscription = _audioRecorder
-          .onAmplitudeChanged(const Duration(milliseconds: 100))
-          .listen((amp) {
-        if (!_isListeningWindow || _voiceDetectedFlag) return;
-        final db = amp.current;
-        if (db > _peakVolumeDb) _peakVolumeDb = db;
-
-        const double silenceThresholdDb = -32.0;
-        if (db > silenceThresholdDb && !_voiceDetectedFlag) {
-          _voiceDetectedFlag = true;
-          if (mounted) {
-            setState(() {
-              _voiceDetected = true;
-            });
-          }
-
-          _voiceStopTimer?.cancel();
-          _voiceStopTimer = Timer(const Duration(milliseconds: 2000), () {
-            _finishDetectionWindow();
-          });
-        }
-      });
-    } catch (_) {}
+    // Amplitude listener disabled to prevent mic initialization clicks from triggering false voice detection
   }
 
   @override
