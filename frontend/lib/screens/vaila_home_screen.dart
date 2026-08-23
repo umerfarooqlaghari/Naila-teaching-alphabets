@@ -203,7 +203,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         if (!_isListeningWindow || _voiceDetectedFlag) return;
         final db = amp.current;
 
-        const double speechThresholdDb = -34.0;
+        const double speechThresholdDb = -24.0;
         if (db > speechThresholdDb && !_voiceDetectedFlag) {
           _voiceDetectedFlag = true;
           if (mounted) {
