@@ -352,9 +352,24 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
           listenMode: stt.ListenMode.dictation,
           cancelOnError: false,
         );
-      } catch (e) {
-        print('STT listen error: $e');
+      try {
+      if (await _audioRecorder.hasPermission()) {
+        String path = '';
+        if (!kIsWeb) {
+          final tempDir = await getTemporaryDirectory();
+          path = '${tempDir.path}/pronunciation_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+
+        final config = RecordConfig(
+          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
+          sampleRate: 44100,
+          numChannels: 1,
+        );
+
+        await _audioRecorder.start(config, path: path);
       }
+    } catch (e) {
+      print('Recording error: $e');
     }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -383,13 +398,20 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       }
     } catch (_) {}
 
+    String? audioPath;
+    try {
+      if (await _audioRecorder.isRecording()) {
+        audioPath = await _audioRecorder.stop();
+      }
+    } catch (e) {
+      print('Stop recording exception: $e');
+    }
+
     if (!mounted) return;
     setState(() {
       _isListeningWindow = false;
       _isEvaluating = true;
     });
-
-    final bool childSpoke = _recognizedWords.trim().isNotEmpty || _voiceDetectedFlag;
 
     double score = 0;
     bool passed = false;
@@ -397,25 +419,18 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     String transcription = '';
 
     try {
-      if (!childSpoke) {
+      final response = await _sendToBackend(audioPath ?? '', _currentAlphabet.letter, _recognizedWords);
+
+      if (response != null) {
+        score = (response['accuracy'] as num).toDouble();
+        passed = response['passed'] ?? false;
+        feedback = response['feedback'] ?? '';
+        transcription = response['whisper_transcription'] ?? '';
+      } else {
         score = 0.0;
         passed = false;
-        feedback = "No voice heard. Please speak letter '${_currentAlphabet.sound}' into the microphone!";
-        transcription = "(silent)";
-      } else {
-        final response = await _sendToBackend('', _currentAlphabet.letter, _recognizedWords);
-
-        if (response != null) {
-          score = (response['accuracy'] as num).toDouble();
-          passed = response['passed'] ?? false;
-          feedback = response['feedback'] ?? '';
-          transcription = response['whisper_transcription'] ?? '';
-        } else {
-          score = 0.0;
-          passed = false;
-          feedback = "Evaluation notice: Unable to connect to server. Please try again!";
-          transcription = "(server connection error)";
-        }
+        feedback = "Evaluation notice: Unable to connect to server. Please try again!";
+        transcription = "(server connection error)";
       }
     } catch (e) {
       score = 0.0;
@@ -452,7 +467,15 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         request.fields['spoken_text'] = spokenText;
         request.fields['student_id'] = _studentName;
 
-        final streamedResponse = await request.send().timeout(const Duration(seconds: 6));
+        if (audioPath.isNotEmpty) {
+          try {
+            request.files.add(
+              await http.MultipartFile.fromPath('file', audioPath),
+            );
+          } catch (_) {}
+        }
+
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 12));
         final response = await http.Response.fromStream(streamedResponse);
 
         if (response.statusCode == 200) {
