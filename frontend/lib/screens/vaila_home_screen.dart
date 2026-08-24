@@ -283,24 +283,45 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceDetectedFlag = false;
     _pulseController.repeat(reverse: true);
 
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        String path = '';
-        if (!kIsWeb) {
-          final tempDir = await getTemporaryDirectory();
-          path = '${tempDir.path}/pronunciation_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        }
-
-        final config = RecordConfig(
-          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
-          sampleRate: 44100,
-          numChannels: 1,
+    if (!_speechToTextAvailable) {
+      try {
+        _speechToTextAvailable = await _speechToText.initialize(
+          onError: (err) => print('STT init error: $err'),
+          onStatus: (status) => print('STT status: $status'),
         );
+      } catch (_) {}
+    }
 
-        await _audioRecorder.start(config, path: path);
+    if (_speechToTextAvailable) {
+      try {
+        await _speechToText.listen(
+          onResult: (result) {
+            if (mounted) {
+              setState(() {
+                _recognizedWords = result.recognizedWords;
+                if (_recognizedWords.trim().isNotEmpty) {
+                  _voiceDetected = true;
+                  _voiceDetectedFlag = true;
+
+                  // FAST FINISH: Trigger evaluation in 400ms as soon as speech is uttered!
+                  _voiceStopTimer?.cancel();
+                  _voiceStopTimer = Timer(const Duration(milliseconds: 400), () {
+                    _finishDetectionWindow();
+                  });
+                }
+              });
+            }
+          },
+          listenFor: const Duration(seconds: 5),
+          pauseFor: const Duration(seconds: 2),
+          partialResults: true,
+          localeId: 'en_US',
+          listenMode: stt.ListenMode.confirmation,
+          cancelOnError: false,
+        );
+      } catch (e) {
+        print('STT listen error: $e');
       }
-    } catch (e) {
-      print('Recording start exception: $e');
     }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
