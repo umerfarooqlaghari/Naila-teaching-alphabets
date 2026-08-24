@@ -275,15 +275,15 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       _isListeningWindow = true;
       _timeLeft = 5;
       _evalResult = null;
-      _voiceDetected = false;
+      _voiceDetected = true; // Always show "Recording your voice..." since mic is active
       _isEvaluating = false;
       _recognizedWords = '';
     });
 
-    _voiceDetectedFlag = false;
+    _voiceDetectedFlag = true;
     _pulseController.repeat(reverse: true);
 
-    // STEP 1: Start hardware audio recorder FIRST (records .m4a file as backup)
+    // Start ONLY hardware audio recorder (NO Google STT to avoid mic collision)
     try {
       if (await _audioRecorder.hasPermission()) {
         String path = '';
@@ -304,48 +304,6 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       print('Recording start exception: $e');
     }
 
-    // STEP 2: Start Google STT alongside audio recorder (captures spoken text)
-    if (!_speechToTextAvailable) {
-      try {
-        _speechToTextAvailable = await _speechToText.initialize(
-          onError: (err) => print('STT init error: $err'),
-          onStatus: (status) => print('STT status: $status'),
-        );
-      } catch (_) {}
-    }
-
-    if (_speechToTextAvailable) {
-      try {
-        await _speechToText.listen(
-          onResult: (result) {
-            if (mounted) {
-              setState(() {
-                _recognizedWords = result.recognizedWords;
-                if (_recognizedWords.trim().isNotEmpty) {
-                  _voiceDetected = true;
-                  _voiceDetectedFlag = true;
-
-                  // FAST FINISH: Trigger evaluation in 400ms as soon as speech is uttered!
-                  _voiceStopTimer?.cancel();
-                  _voiceStopTimer = Timer(const Duration(milliseconds: 400), () {
-                    _finishDetectionWindow();
-                  });
-                }
-              });
-            }
-          },
-          listenFor: const Duration(seconds: 5),
-          pauseFor: const Duration(seconds: 2),
-          partialResults: true,
-          localeId: 'en_US',
-          listenMode: stt.ListenMode.confirmation,
-          cancelOnError: false,
-        );
-      } catch (e) {
-        print('STT listen error: $e');
-      }
-    }
-
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeLeft > 1) {
         if (mounted) {
@@ -355,7 +313,6 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
         }
       } else {
         timer.cancel();
-        _voiceStopTimer?.cancel();
         _finishDetectionWindow();
       }
     });
@@ -366,14 +323,8 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceStopTimer?.cancel();
     _pulseController.stop();
 
-    // Give Google Speech Recognizer 450ms to flush final buffer results to _recognizedWords
-    await Future.delayed(const Duration(milliseconds: 450));
-
-    try {
-      if (_speechToText.isListening) {
-        await _speechToText.stop();
-      }
-    } catch (_) {}
+    // Small delay to ensure audio recorder captures the last moment of speech
+    await Future.delayed(const Duration(milliseconds: 200));
 
     String? audioPath;
     try {
