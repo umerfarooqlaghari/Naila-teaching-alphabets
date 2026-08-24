@@ -641,13 +641,14 @@ async def evaluate_audio(
                         other_variants.add(v.lower())
 
         stt_transcription = spoken_text.strip().lower()
+        audio_file_uploaded = file is not None
 
         # SERVER-SIDE AUDIO TRANSCRIPTION FALLBACK:
         # If phone's Google STT sent empty text BUT user uploaded an audio file,
         # transcribe the audio file on the server using SpeechRecognition library.
         # This gives us a REAL transcription of what the user actually said.
         # NO auto-pass: we listen to the actual audio and evaluate what was spoken.
-        if not stt_transcription and file is not None and _sr_available:
+        if not stt_transcription and audio_file_uploaded and _sr_available:
             try:
                 audio_bytes = await file.read()
                 if len(audio_bytes) > 1000:
@@ -732,13 +733,20 @@ async def evaluate_audio(
             accuracy = 42.0
             passed = False
             display_text = detected_wrong.upper() if len(detected_wrong) == 1 else detected_wrong
-            feedback = f"I heard '{display_text}' but expected letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
+            feedback = f"Wrong word spoken! I heard '{display_text}' but expected letter '{target.upper()}'. Try again!"
         elif is_target_match:
             accuracy = 95.0
             passed = True
             display_text = target.upper()
             feedback = f"Great job! You said '{display_text}' — 95.0% match for letter '{target.upper()}'."
+        elif not cleaned_stt and audio_file_uploaded:
+            # User spoke something but server couldn't transcribe it — wrong/unclear word
+            accuracy = 42.0
+            passed = False
+            display_text = "(unclear)"
+            feedback = f"Wrong word spoken! Expected letter '{target.upper()}'. Please say '{target.upper()}' clearly. Try again!"
         elif not cleaned_stt:
+            # No audio file uploaded or truly silent — real silence
             accuracy = 0.0
             passed = False
             display_text = "(silent)"
@@ -747,7 +755,7 @@ async def evaluate_audio(
             accuracy = 42.0
             passed = False
             display_text = cleaned_stt
-            feedback = f"I heard '{display_text}' but expected letter '{target.upper()}'. Accuracy: 42.0%. Try again!"
+            feedback = f"Wrong word spoken! I heard '{display_text}' but expected letter '{target.upper()}'. Try again!"
 
         target_ipa = text_to_ipa(IPA_REFERENCE_WORDS.get(target, target_sound))
         spoken_ipa = text_to_ipa(display_text)
