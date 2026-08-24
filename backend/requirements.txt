@@ -10,3 +10,4 @@ certifi>=2024.0.0
 imageio-ffmpeg>=0.6.0
 phonemizer
 Levenshtein
+SpeechRecognition

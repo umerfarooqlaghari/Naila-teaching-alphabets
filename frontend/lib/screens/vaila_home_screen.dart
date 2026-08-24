@@ -283,6 +283,28 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _voiceDetectedFlag = false;
     _pulseController.repeat(reverse: true);
 
+    // STEP 1: Start hardware audio recorder FIRST (records .m4a file as backup)
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        String path = '';
+        if (!kIsWeb) {
+          final tempDir = await getTemporaryDirectory();
+          path = '${tempDir.path}/pronunciation_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
+
+        final config = RecordConfig(
+          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
+          sampleRate: 44100,
+          numChannels: 1,
+        );
+
+        await _audioRecorder.start(config, path: path);
+      }
+    } catch (e) {
+      print('Recording start exception: $e');
+    }
+
+    // STEP 2: Start Google STT alongside audio recorder (captures spoken text)
     if (!_speechToTextAvailable) {
       try {
         _speechToTextAvailable = await _speechToText.initialize(

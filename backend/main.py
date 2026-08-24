@@ -12,6 +12,14 @@ from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 from datetime import datetime
 
+# Server-side speech recognition for audio file transcription
+try:
+    import speech_recognition as sr
+    _sr_available = True
+except ImportError:
+    _sr_available = False
+    print("[WARNING] speech_recognition not installed. Server-side audio transcription disabled.")
+
 _ffmpeg_initialized = False
 
 def setup_ffmpeg():
@@ -633,6 +641,53 @@ async def evaluate_audio(
                         other_variants.add(v.lower())
 
         stt_transcription = spoken_text.strip().lower()
+
+        # SERVER-SIDE AUDIO TRANSCRIPTION FALLBACK:
+        # If phone's Google STT sent empty text BUT user uploaded an audio file,
+        # transcribe the audio file on the server using SpeechRecognition library.
+        # This gives us a REAL transcription of what the user actually said.
+        # NO auto-pass: we listen to the actual audio and evaluate what was spoken.
+        if not stt_transcription and file is not None and _sr_available:
+            try:
+                audio_bytes = await file.read()
+                if len(audio_bytes) > 1000:
+                    import subprocess
+                    with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp_m4a:
+                        tmp_m4a.write(audio_bytes)
+                        tmp_m4a_path = tmp_m4a.name
+
+                    # Convert m4a to wav using ffmpeg
+                    tmp_wav_path = tmp_m4a_path.replace(".m4a", ".wav")
+                    try:
+                        setup_ffmpeg()
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-i", tmp_m4a_path, "-ar", "16000", "-ac", "1", tmp_wav_path],
+                            capture_output=True, timeout=10
+                        )
+
+                        if os.path.exists(tmp_wav_path) and os.path.getsize(tmp_wav_path) > 500:
+                            recognizer = sr.Recognizer()
+                            with sr.AudioFile(tmp_wav_path) as source:
+                                audio_data = recognizer.record(source)
+                            try:
+                                server_text = recognizer.recognize_google(audio_data, language="en-US")
+                                if server_text:
+                                    stt_transcription = server_text.strip().lower()
+                                    print(f"[SERVER STT] Transcribed from audio: '{stt_transcription}'")
+                            except sr.UnknownValueError:
+                                print("[SERVER STT] Could not understand audio — silence or unclear")
+                            except sr.RequestError as e:
+                                print(f"[SERVER STT] Google API error: {e}")
+                    except Exception as conv_err:
+                        print(f"[SERVER STT] Conversion error: {conv_err}")
+                    finally:
+                        try: os.unlink(tmp_m4a_path)
+                        except: pass
+                        try: os.unlink(tmp_wav_path)
+                        except: pass
+            except Exception as sr_err:
+                print(f"[SERVER STT] Error: {sr_err}")
+
         cleaned_stt = stt_transcription.strip(".,!? ").lower()
         stt_words = set(cleaned_stt.split())
 
