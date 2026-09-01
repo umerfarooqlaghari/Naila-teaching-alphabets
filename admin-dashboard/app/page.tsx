@@ -308,7 +308,25 @@ export default function AdminDashboard() {
                           <Check size={16} /> Approve User
                         </button>
                       ) : (
-                        u.is_active ? (
+                        (!u.is_active || u.payment_status_badge === 'red') ? (
+                          <button
+                            onClick={() => handleApproveUser(u)}
+                            style={{
+                              backgroundColor: '#10b981',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '8px 16px',
+                              borderRadius: '8px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Check size={16} /> Re-activate
+                          </button>
+                        ) : (
                           <button
                             onClick={() => handleDeactivateUser(u)}
                             style={{
@@ -322,21 +340,6 @@ export default function AdminDashboard() {
                             }}
                           >
                             Deactivate
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleApproveUser(u)}
-                            style={{
-                              backgroundColor: '#4361ee',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Re-activate
                           </button>
                         )
                       )}

@@ -391,11 +391,16 @@ async def upload_monthly_payment(
             "status": "pending",
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
         })
+        db.users.update_one(
+            {"username": username},
+            {"$set": {"registration_screenshot": screenshot_url, "is_active": 0}}
+        )
     else:
         conn = sqlite3.connect("vaila.db")
         cursor = conn.cursor()
         cursor.execute("INSERT INTO payment_requests (username, month, year, screenshot_url, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
                        (username, month, year, screenshot_url, time.strftime("%Y-%m-%d %H:%M:%S")))
+        cursor.execute("UPDATE users SET registration_screenshot = ?, is_active = 0 WHERE username = ?", (screenshot_url, username))
         conn.commit()
         conn.close()
 
@@ -487,6 +492,13 @@ def get_all_users():
         conn.close()
 
     for u in users:
+        # If user has payment requests, map latest screenshot
+        u_payments = [p for p in payments if p.get('username') == u.get('username')]
+        if u_payments:
+            latest_p = u_payments[-1]
+            if latest_p.get('screenshot_url'):
+                u['registration_screenshot'] = latest_p.get('screenshot_url')
+
         if u.get('last_payment_month', '') >= current_month and u.get('is_active'):
             if days_left <= 3:
                 u['payment_status_badge'] = "orange"

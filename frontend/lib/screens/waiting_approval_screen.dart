@@ -37,7 +37,7 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['is_approved'] == true && !_isApproved) {
+        if (data['is_approved'] == true && data['is_active'] == true && !_isApproved) {
           _isApproved = true;
           _statusTimer?.cancel();
 
@@ -61,14 +61,14 @@ class _WaitingApprovalScreenState extends State<WaitingApprovalScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                "Registration Approved!",
+                "Account Approved!",
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 18),
               ),
             ),
           ],
         ),
         content: Text(
-          "Your registration has been approved by Vaila Admin! Now you can login with your credentials to start learning.",
+          "Your account payment proof has been verified and activated by Vaila Admin! Now you can login to start learning.",
           style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
         ),
         actions: [

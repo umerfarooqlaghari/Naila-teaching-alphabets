@@ -299,8 +299,8 @@ class _MonthlyPaymentModalState extends State<MonthlyPaymentModal> {
       if (res.statusCode == 200) {
         if (!mounted) return;
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Monthly fee screenshot submitted! Admin will reactivate your account shortly.")),
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => WaitingApprovalScreen(username: widget.username)),
         );
       }
     } catch (e) {

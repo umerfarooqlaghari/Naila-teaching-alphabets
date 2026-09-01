@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -41,6 +42,17 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     with TickerProviderStateMixin {
   static const String apiUrl = 'https://naila-teaching-alphabets.onrender.com';
   static const String fallbackApiUrl = 'https://naila-teaching-alphabets.onrender.com';
+
+  // ───── Instruction points for the popup ─────
+  static const List<String> _instructionPoints = [
+    'Look at the letter displayed on the screen',
+    'Tap "Listen" to hear the correct pronunciation 3 times',
+    'When ready, tap "Speak" to start recording your voice',
+    'Say the letter sound clearly into the microphone',
+    'Wait for the AI to evaluate your pronunciation',
+    'If you pass, you will move to the next letter automatically',
+    'Speak loudly and clearly for the best results',
+  ];
 
   final List<AlphabetItem> _alphabets = [
     AlphabetItem(
@@ -116,6 +128,12 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
 
   String _studentName = 'Learner';
 
+  // ───── Live Camera state ─────
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+  List<CameraDescription> _cameras = [];
+  int _selectedCameraIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +141,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _initTts();
     _initAudioStream();
     _initSpeechToText();
+    _initCamera();
 
     _shakeController = AnimationController(
       vsync: this,
@@ -225,6 +244,7 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     _pulseController.dispose();
     _flutterTts.stop();
     _audioRecorder.dispose();
+    _cameraController?.dispose();
     try { _speechToText.stop(); } catch (_) {}
     super.dispose();
   }
@@ -432,227 +452,690 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 14.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  // ───── Live Camera Controller Methods ─────
+  void _initCamera() async {
+    try {
+      _cameras = await availableCameras();
+      if (_cameras.isNotEmpty) {
+        int frontCameraIndex = _cameras.indexWhere(
+          (cam) => cam.lensDirection == CameraLensDirection.front,
+        );
+        _selectedCameraIndex = frontCameraIndex != -1 ? frontCameraIndex : 0;
+        await _initializeCameraController(_cameras[_selectedCameraIndex]);
+      }
+    } catch (e) {
+      print('Camera init error: $e');
+    }
+  }
+
+  Future<void> _initializeCameraController(CameraDescription cameraDescription) async {
+    final controller = CameraController(
+      cameraDescription,
+      ResolutionPreset.low,
+      enableAudio: false,
+    );
+    _cameraController = controller;
+    try {
+      await controller.initialize();
+      if (mounted) {
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      }
+    } catch (e) {
+      print('Camera controller init error: $e');
+    }
+  }
+
+  void _toggleCamera() async {
+    if (_cameras.length < 2) return;
+    _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
+    if (mounted) {
+      setState(() {
+        _isCameraInitialized = false;
+      });
+    }
+    await _cameraController?.dispose();
+    await _initializeCameraController(_cameras[_selectedCameraIndex]);
+  }
+
+  // ───── NEW: Instructions Popup ─────
+  void _showInstructionsPopup() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
                 children: [
-                  // App Top Bar Header with Back Button and Logout Button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          _cancelTtsLoop = true;
-                          try { _flutterTts.stop(); } catch (_) {}
-                          if (Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF38BDF8), size: 22),
-                        tooltip: "Back",
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Text(
-                              "Vaila Phonics Fun 🎈",
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF38BDF8),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "Tap letter → Hear 3× → Speak!",
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _handleLogout,
-                        icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
-                        tooltip: "Logout",
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C5CFC).withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.help_outline_rounded, color: Color(0xFF7C5CFC), size: 24),
                   ),
-
-                  // Playing 3x Sound Banner
-                  if (_isSpeaking3x)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 18),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "How to Practice",
+                      style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF06B6D4).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF06B6D4)),
+                        color: const Color(0xFFF1F5F9),
+                        shape: BoxShape.circle,
                       ),
-                      child: Text(
-                        "🔊 \"${_currentAlphabet.sound}\" — $_speechCount of 3...",
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF38BDF8),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-
-                  // SLEEK & COMPACT CENTERED ALPHABET CARD
-                  AnimatedBuilder(
-                    animation: _shakeAnimation,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(_shakeAnimation.value, 0),
-                        child: child,
-                      );
-                    },
-                    child: GestureDetector(
-                      onTap: () {
-                        if (!_isSpeaking3x && !_isListeningWindow && !_isEvaluating) {
-                          _speakPhoneticSound3Times();
-                        }
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: 215,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: _evalResult?.containsKey('passed') == true
-                                ? (_evalResult!['passed'] ? const Color(0xFF10B981) : const Color(0xFFF43F5E))
-                                : (_isListeningWindow ? const Color(0xFFA855F7) : const Color(0xFF38BDF8)),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_evalResult?.containsKey('passed') == true
-                                      ? (_evalResult!['passed'] ? const Color(0xFF10B981) : const Color(0xFFF43F5E))
-                                      : (_isListeningWindow ? const Color(0xFFA855F7) : const Color(0xFF38BDF8)))
-                                  .withOpacity(0.25),
-                              blurRadius: 18,
-                              offset: const Offset(0, 8),
-                            )
-                          ],
-                        ),
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              top: 14,
-                              left: 0,
-                              right: 0,
-                              child: Text(
-                                "TAP TO HEAR SOUND",
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.5,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    _currentAlphabet.letter,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 76,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF38BDF8),
-                                      height: 1.0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    "Sound: \"${_currentAlphabet.sound}\"",
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  Text(
-                                    "(${_currentAlphabet.sound} like ${_currentAlphabet.word})",
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      color: const Color(0xFF94A3B8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 14,
-                              right: 14,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.volume_up_rounded, color: Colors.white, size: 20),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      child: const Icon(Icons.close_rounded, color: Color(0xFF64748B), size: 18),
                     ),
                   ),
-
-                  // YOUR TURN BUTTON / MIC DETECTION WINDOW / RESULTS CARD
-                  _buildInteractiveBottomSection(),
                 ],
               ),
-            ),
+              const SizedBox(height: 20),
+              // Instruction bullet points
+              ..._instructionPoints.asMap().entries.map((entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7C5CFC).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${entry.key + 1}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF7C5CFC),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          entry.value,
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            color: const Color(0xFF475569),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 8),
+              // Got it button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C5CFC),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text(
+                    "Got it!",
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  //  BUILD — Redesigned UI (light theme matching mockup)
+  // ═══════════════════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FF),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ───── TOP BAR: Camera + Title + Star ─────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Live Camera Preview Box (Video Call Style)
+                  GestureDetector(
+                    onTap: _toggleCamera,
+                    child: Container(
+                      width: 74,
+                      height: 74,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        color: const Color(0xFFE0E7FF),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (_isCameraInitialized &&
+                                _cameraController != null &&
+                                _cameraController!.value.isInitialized)
+                              FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: _cameraController!.value.previewSize!.height,
+                                  height: _cameraController!.value.previewSize!.width,
+                                  child: CameraPreview(_cameraController!),
+                                ),
+                              )
+                            else
+                              Center(
+                                child: Icon(
+                                  Icons.person_rounded,
+                                  color: const Color(0xFF7C5CFC).withOpacity(0.45),
+                                  size: 38,
+                                ),
+                              ),
+                            // "You" badge — top left
+                            Positioned(
+                              top: 5,
+                              left: 5,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  "You",
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Camera switch icon overlay — right center
+                            Positioned(
+                              right: 3,
+                              top: 24,
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.cameraswitch_rounded, color: Color(0xFF64748B), size: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // Title Section (centered)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.headphones_rounded, color: Color(0xFF7C5CFC), size: 22),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Speak Up",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF1E293B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Speech Practice for Deaf Students",
+                            style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              color: const Color(0xFF9CA3AF),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // Settings icon with menu — top right
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'back') {
+                          _cancelTtsLoop = true;
+                          try { _flutterTts.stop(); } catch (_) {}
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          }
+                        } else if (value == 'logout') {
+                          _handleLogout();
+                        }
+                      },
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      color: Colors.white,
+                      elevation: 8,
+                      offset: const Offset(0, 48),
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'back',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF7C5CFC), size: 18),
+                              const SizedBox(width: 10),
+                              Text('Go Back', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: const Color(0xFF1E293B))),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                              const SizedBox(width: 10),
+                              Text('Logout', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C5CFC).withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.settings_rounded, color: Color(0xFF7C5CFC), size: 22),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ───── MAIN SCROLLABLE CONTENT ─────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 28),
+
+                    // Playing 3x Sound Banner
+                    if (_isSpeaking3x)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C5CFC).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF7C5CFC).withOpacity(0.25)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.volume_up_rounded, color: Color(0xFF7C5CFC), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              "\"${_currentAlphabet.sound}\" — $_speechCount of 3...",
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF7C5CFC),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Sound wave icon (green)
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      color: const Color(0xFF10B981),
+                      size: 30,
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // "Current Word" label
+                    Text(
+                      "Current Word",
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        color: const Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // ───── Large Alphabet Letter (with shake animation) ─────
+                    AnimatedBuilder(
+                      animation: _shakeAnimation,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(_shakeAnimation.value, 0),
+                          child: child,
+                        );
+                      },
+                      child: GestureDetector(
+                        onTap: () {
+                          if (!_isSpeaking3x && !_isListeningWindow && !_isEvaluating) {
+                            _speakPhoneticSound3Times();
+                          }
+                        },
+                        child: Text(
+                          _currentAlphabet.letter.toUpperCase(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 100,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1E293B),
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // Subtitle
+                    Text(
+                      "Let's practice this sound",
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        color: const Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // ───── Interactive Bottom Section ─────
+                    _buildInteractiveBottomSection(),
+
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+
+            // ───── BOTTOM BAR: Progress + Instructions ─────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 16, 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(26),
+                  topRight: Radius.circular(26),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Progress Section
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Your Progress",
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            // Progress dots A–E with connecting lines
+                            ...List.generate(_alphabets.length, (index) {
+                              final bool isCompleted = index < _currentIndex;
+                              final bool isCurrent = index == _currentIndex;
+                              final bool isActive = isCompleted || isCurrent;
+
+                              return Expanded(
+                                child: Row(
+                                  children: [
+                                    // Connecting line (before dot, except first)
+                                    if (index > 0)
+                                      Expanded(
+                                        child: Container(
+                                          height: 2.5,
+                                          decoration: BoxDecoration(
+                                            color: isCompleted
+                                                ? const Color(0xFF7C5CFC)
+                                                : const Color(0xFFE2E8F0),
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                      ),
+                                    // Dot + Label
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: isCurrent ? 16 : 12,
+                                          height: isCurrent ? 16 : 12,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isActive
+                                                ? const Color(0xFF7C5CFC)
+                                                : const Color(0xFFE2E8F0),
+                                            boxShadow: isCurrent
+                                                ? [
+                                                    BoxShadow(
+                                                      color: const Color(0xFF7C5CFC).withOpacity(0.35),
+                                                      blurRadius: 8,
+                                                      spreadRadius: 1,
+                                                    )
+                                                  ]
+                                                : [],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          _alphabets[index].letter.toUpperCase(),
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: isActive
+                                                ? const Color(0xFF7C5CFC)
+                                                : const Color(0xFF9CA3AF),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            const SizedBox(width: 10),
+                            // Trophy icon
+                            Icon(
+                              Icons.emoji_events_rounded,
+                              color: _currentIndex >= _alphabets.length
+                                  ? Colors.amber
+                                  : const Color(0xFFD1D5DB),
+                              size: 24,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  // Instructions Button
+                  GestureDetector(
+                    onTap: _showInstructionsPopup,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF1E293B).withOpacity(0.25),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.help_outline_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          "Instructions",
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  //  Bottom Section: Listen/Speak cards OR Listening/Evaluating/Results
+  // ═══════════════════════════════════════════════════════════════════
+
   Widget _buildInteractiveBottomSection() {
+    // ── Evaluating state ──
     if (_isEvaluating) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFF38BDF8)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF7C5CFC).withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            const CircularProgressIndicator(color: Color(0xFF38BDF8)),
-            const SizedBox(height: 12),
+            const CircularProgressIndicator(
+              color: Color(0xFF7C5CFC),
+              strokeWidth: 3,
+            ),
+            const SizedBox(height: 16),
             Text(
               "Evaluating Speech...",
-              style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF1E293B),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Please wait a moment",
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF9CA3AF),
+                fontSize: 12,
+              ),
             ),
           ],
         ),
       );
     }
 
+    // ── Results state ──
     if (_evalResult != null) {
       final bool passed = _evalResult!['passed'];
       final double score = _evalResult!['accuracy'];
@@ -660,14 +1143,22 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
 
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: passed ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
             width: 2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: (passed ? const Color(0xFF10B981) : const Color(0xFFF43F5E))
+                  .withOpacity(0.12),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -677,31 +1168,35 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
                 Icon(
                   passed ? Icons.check_circle_rounded : Icons.cancel_rounded,
                   color: passed ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
-                  size: 28,
+                  size: 30,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Text(
                   passed ? "GREAT JOB!" : "TRY AGAIN!",
                   style: GoogleFonts.outfit(
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: passed ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             Text(
               "Match Score: ${score.toStringAsFixed(1)}%",
-              style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1E293B),
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               feedback,
               textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF94A3B8)),
+              style: GoogleFonts.outfit(fontSize: 13, color: const Color(0xFF9CA3AF)),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
 
             if (passed)
               SizedBox(
@@ -709,12 +1204,16 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
                   ),
                   onPressed: _handleNextAlphabet,
                   icon: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                  label: Text("NEXT LETTER ➔", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  label: Text(
+                    "NEXT LETTER ➔",
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
                 ),
               )
             else
@@ -722,63 +1221,95 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4361EE),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: const Color(0xFF7C5CFC),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
                   ),
                   onPressed: () => _speakPhoneticSound3Times(),
                   icon: const Icon(Icons.replay_rounded, color: Colors.white),
-                  label: Text("TRY AGAIN 🔄", style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  label: Text(
+                    "TRY AGAIN 🔄",
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
                 ),
-              )
+              ),
           ],
         ),
       );
     }
 
+    // ── Listening state ──
     if (_isListeningWindow) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFA855F7), width: 2),
+          border: Border.all(color: const Color(0xFF7C5CFC).withOpacity(0.3), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF7C5CFC).withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.mic_rounded, color: Color(0xFFA855F7), size: 22),
-                const SizedBox(width: 6),
+                const Icon(Icons.mic_rounded, color: Color(0xFF7C5CFC), size: 22),
+                const SizedBox(width: 8),
                 Text(
                   "Listening... say \"${_currentAlphabet.sound}\"",
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1E293B),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
 
-            LinearProgressIndicator(
-              value: _timeLeft / 12,
-              backgroundColor: Colors.white.withOpacity(0.1),
-              color: const Color(0xFFA855F7),
-              minHeight: 6,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _timeLeft / 12,
+                backgroundColor: const Color(0xFFE2E8F0),
+                color: const Color(0xFF7C5CFC),
+                minHeight: 6,
+              ),
             ),
             const SizedBox(height: 8),
-            Text("${_timeLeft}s remaining", style: GoogleFonts.outfit(color: const Color(0xFF94A3B8), fontSize: 12)),
-            const SizedBox(height: 12),
+            Text(
+              "${_timeLeft}s remaining",
+              style: GoogleFonts.outfit(color: const Color(0xFF9CA3AF), fontSize: 12),
+            ),
+            const SizedBox(height: 16),
 
             ScaleTransition(
               scale: _pulseAnimation,
               child: GestureDetector(
                 onTap: _finishDetectionWindow,
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: _voiceDetected ? const Color(0xFF10B981) : const Color(0xFFA855F7),
+                    color: _voiceDetected ? const Color(0xFF10B981) : const Color(0xFF7C5CFC),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_voiceDetected
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF7C5CFC))
+                            .withOpacity(0.3),
+                        blurRadius: 18,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
                   child: Icon(
                     _voiceDetected ? Icons.graphic_eq_rounded : Icons.mic_rounded,
@@ -788,13 +1319,15 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               (_voiceDetected || _recognizedWords.trim().isNotEmpty)
                   ? "Voice Heard! Recording... 🎤"
                   : "Waiting for your voice...",
               style: GoogleFonts.outfit(
-                color: (_voiceDetected || _recognizedWords.trim().isNotEmpty) ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                color: (_voiceDetected || _recognizedWords.trim().isNotEmpty)
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFF9CA3AF),
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
               ),
@@ -804,34 +1337,151 @@ class _VailaHomeScreenState extends State<VailaHomeScreen>
       );
     }
 
-    if (_isReadyToSpeak) {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    // ── Default / Ready state: Listen + Speak cards ──
+    return Row(
+      children: [
+        // Listen Card
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              if (!_isSpeaking3x && !_isListeningWindow && !_isEvaluating) {
+                _speakPhoneticSound3Times();
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0EAFF),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7C5CFC).withOpacity(0.08),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C5CFC).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.hearing_rounded, color: Color(0xFF7C5CFC), size: 30),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    "Listen",
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF7C5CFC),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Listen to the sound",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: const Color(0xFF7C5CFC).withOpacity(0.65),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          onPressed: _startDetectionWindow,
-          icon: const Icon(Icons.mic_rounded, color: Colors.white, size: 24),
-          label: Text("YOUR TURN — SPEAK NOW! 🎤", style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
         ),
-      );
-    }
 
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFF38BDF8)),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        const SizedBox(width: 14),
+
+        // Speak Card
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              if (_isReadyToSpeak) {
+                _startDetectionWindow();
+              } else if (!_isSpeaking3x && !_isListeningWindow && !_isEvaluating) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Tap "Listen" first to hear the sound!',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                    ),
+                    backgroundColor: const Color(0xFF7C5CFC),
+                    duration: const Duration(seconds: 2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                );
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8FFF5),
+                borderRadius: BorderRadius.circular(22),
+                border: _isReadyToSpeak
+                    ? Border.all(color: const Color(0xFF10B981), width: 2.5)
+                    : null,
+                boxShadow: [
+                  BoxShadow(
+                    color: _isReadyToSpeak
+                        ? const Color(0xFF10B981).withOpacity(0.22)
+                        : const Color(0xFF10B981).withOpacity(0.08),
+                    blurRadius: _isReadyToSpeak ? 18 : 14,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.mic_rounded,
+                      color: _isReadyToSpeak
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFF10B981).withOpacity(0.45),
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    "Speak",
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: _isReadyToSpeak
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFF10B981).withOpacity(0.45),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Tap to record your voice",
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: const Color(0xFF10B981).withOpacity(0.6),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        onPressed: () => _speakPhoneticSound3Times(),
-        icon: const Icon(Icons.touch_app_rounded, color: Color(0xFF38BDF8)),
-        label: Text("TAP LETTER TO START 👆", style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF38BDF8))),
-      ),
+      ],
     );
   }
 }
