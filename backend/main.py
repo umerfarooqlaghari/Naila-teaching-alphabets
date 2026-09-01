@@ -341,6 +341,7 @@ def login(req: LoginRequest):
             return {
                 "success": False,
                 "is_approved": False,
+                "username": user_dict.get("username"),
                 "message": "Your registration is waiting for Admin approval. Please check back soon!"
             }
 
@@ -351,6 +352,7 @@ def login(req: LoginRequest):
                 "is_approved": True,
                 "is_active": False,
                 "requires_monthly_payment": True,
+                "username": user_dict.get("username"),
                 "message": f"Please pay your monthly fee for {current_month} to continue using Vaila App."
             }
 
@@ -382,32 +384,40 @@ async def upload_monthly_payment(
 
     screenshot_url = f"/uploads/{filename}"
 
+    target_user_name = username
     if db is not None:
+        user_rec = db.users.find_one({"$or": [{"username": username}, {"email": username}]})
+        if user_rec:
+            target_user_name = user_rec.get("username", username)
+            db.users.update_one(
+                {"_id": user_rec["_id"]},
+                {"$set": {"registration_screenshot": screenshot_url, "is_active": 0}}
+            )
         db.payment_requests.insert_one({
-            "username": username,
+            "username": target_user_name,
             "month": month,
             "year": year,
             "screenshot_url": screenshot_url,
             "status": "pending",
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
         })
-        db.users.update_one(
-            {"username": username},
-            {"$set": {"registration_screenshot": screenshot_url, "is_active": 0}}
-        )
     else:
         conn = sqlite3.connect("vaila.db")
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+        row = cursor.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
+        if row:
+            target_user_name = dict(row).get("username", username)
         cursor.execute("INSERT INTO payment_requests (username, month, year, screenshot_url, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
-                       (username, month, year, screenshot_url, time.strftime("%Y-%m-%d %H:%M:%S")))
-        cursor.execute("UPDATE users SET registration_screenshot = ?, is_active = 0 WHERE username = ?", (screenshot_url, username))
+                       (target_user_name, month, year, screenshot_url, time.strftime("%Y-%m-%d %H:%M:%S")))
+        cursor.execute("UPDATE users SET registration_screenshot = ?, is_active = 0 WHERE username = ? OR email = ?", (screenshot_url, username, username))
         conn.commit()
         conn.close()
 
     send_email_notification(
         "ak1096561@gmail.com",
-        f"💳 Monthly Fee Screenshot Uploaded: {username}",
-        f"User '{username}' uploaded a monthly fee payment screenshot for {month} {year}.\nPlease verify and activate the user."
+        f"💳 Monthly Fee Screenshot Uploaded: {target_user_name}",
+        f"User '{target_user_name}' uploaded a monthly fee payment screenshot for {month} {year}.\nPlease verify and activate the user."
     )
 
     return {"success": True, "message": "Monthly fee screenshot uploaded! Admin will reactivate your account."}

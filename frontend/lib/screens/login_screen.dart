@@ -73,10 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (data['is_approved'] == false) {
           if (!mounted) return;
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => WaitingApprovalScreen(username: input)),
+            MaterialPageRoute(builder: (_) => WaitingApprovalScreen(username: data['username'] ?? input)),
           );
         } else if (data['requires_monthly_payment'] == true) {
-          _showMonthlyPaymentModal(input);
+          _showMonthlyPaymentModal(data['username'] ?? input);
         } else {
           setState(() => _errorMessage = data['detail'] ?? data['message'] ?? 'Login failed');
         }
