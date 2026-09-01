@@ -527,76 +527,112 @@ def get_all_users():
 def approve_user(username: Optional[str] = Form(None), user_id: Optional[str] = Form(None)):
     current_month = time.strftime("%Y-%m")
     user_email = None
-    target_identifier = username or user_id
+    target_identifier = (username or user_id or "").strip()
+
+    if not target_identifier:
+        raise HTTPException(status_code=400, detail="username or user_id is required")
+
+    canonical_username = target_identifier
 
     if db is not None:
         from bson import ObjectId
-        query = {"username": target_identifier}
-        try:
-            if target_identifier and len(target_identifier) == 24:
-                query = {"$or": [{"username": target_identifier}, {"_id": ObjectId(target_identifier)}]}
-        except Exception:
-            pass
+        or_conditions = [
+            {"username": target_identifier},
+            {"email": target_identifier}
+        ]
+        if len(target_identifier) == 24:
+            try:
+                or_conditions.append({"_id": ObjectId(target_identifier)})
+            except Exception:
+                pass
 
-        user = db.users.find_one(query)
-        if user:
-            user_email = user.get("email")
-            target_identifier = user.get("username")
-            db.users.update_one({"_id": user["_id"]}, {"$set": {"is_approved": 1, "is_active": 1, "last_payment_month": current_month}})
+        user = db.users.find_one({"$or": or_conditions})
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User '{target_identifier}' not found in database")
+
+        user_email = user.get("email")
+        canonical_username = user.get("username")
+
+        db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"is_approved": 1, "is_active": 1, "last_payment_month": current_month}}
+        )
+        db.payment_requests.update_many(
+            {"$or": [{"username": canonical_username}, {"username": user_email}]},
+            {"$set": {"status": "approved"}}
+        )
     else:
         conn = sqlite3.connect("vaila.db")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ? OR id = ?", (target_identifier, target_identifier))
-        row = cursor.fetchone()
-        if row:
-            u_dict = dict(row)
-            user_email = u_dict.get("email")
-            target_identifier = u_dict.get("username")
-            cursor.execute("UPDATE users SET is_approved = 1, is_active = 1, last_payment_month = ? WHERE username = ?", (current_month, target_identifier))
+        row = cursor.execute("SELECT * FROM users WHERE username = ? OR email = ? OR id = ?", (target_identifier, target_identifier, target_identifier)).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"User '{target_identifier}' not found in database")
+
+        u_dict = dict(row)
+        user_email = u_dict.get("email")
+        canonical_username = u_dict.get("username")
+
+        cursor.execute("UPDATE users SET is_approved = 1, is_active = 1, last_payment_month = ? WHERE id = ? OR username = ?", (current_month, u_dict.get("id"), canonical_username))
+        cursor.execute("UPDATE payment_requests SET status = 'approved' WHERE username = ? OR username = ?", (canonical_username, user_email))
         conn.commit()
         conn.close()
 
     if user_email:
         send_email_notification(
             user_email,
-            "🎉 Vaila App Account Approved!",
-            f"Hello {target_identifier},\n\nYour registration payment has been verified and approved by Admin!\n\nYou can now open Vaila App, log in, and start your phonetics learning."
+            "🎉 Vaila App Account Approved / Reactivated!",
+            f"Hello {canonical_username},\n\nYour payment screenshot has been verified and your account is now active!\n\nYou can now open Vaila App, log in, and start your phonetics learning."
         )
 
-    return {"success": True, "message": "User approved successfully"}
+    return {"success": True, "message": "User approved and activated successfully"}
 
 
 @app.post("/api/admin/deactivate-user")
 def deactivate_user(username: Optional[str] = Form(None), user_id: Optional[str] = Form(None)):
     user_email = None
-    target_identifier = username or user_id
+    target_identifier = (username or user_id or "").strip()
+
+    if not target_identifier:
+        raise HTTPException(status_code=400, detail="username or user_id is required")
+
+    canonical_username = target_identifier
 
     if db is not None:
         from bson import ObjectId
-        query = {"username": target_identifier}
-        try:
-            if target_identifier and len(target_identifier) == 24:
-                query = {"$or": [{"username": target_identifier}, {"_id": ObjectId(target_identifier)}]}
-        except Exception:
-            pass
+        or_conditions = [
+            {"username": target_identifier},
+            {"email": target_identifier}
+        ]
+        if len(target_identifier) == 24:
+            try:
+                or_conditions.append({"_id": ObjectId(target_identifier)})
+            except Exception:
+                pass
 
-        user = db.users.find_one(query)
-        if user:
-            user_email = user.get("email")
-            target_identifier = user.get("username")
-            db.users.update_one({"_id": user["_id"]}, {"$set": {"is_active": 0}})
+        user = db.users.find_one({"$or": or_conditions})
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User '{target_identifier}' not found in database")
+
+        user_email = user.get("email")
+        canonical_username = user.get("username")
+
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"is_active": 0}})
     else:
         conn = sqlite3.connect("vaila.db")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ? OR id = ?", (target_identifier, target_identifier))
-        row = cursor.fetchone()
-        if row:
-            u_dict = dict(row)
-            user_email = u_dict.get("email")
-            target_identifier = u_dict.get("username")
-            cursor.execute("UPDATE users SET is_active = 0 WHERE username = ?", (target_identifier,))
+        row = cursor.execute("SELECT * FROM users WHERE username = ? OR email = ? OR id = ?", (target_identifier, target_identifier, target_identifier)).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"User '{target_identifier}' not found in database")
+
+        u_dict = dict(row)
+        user_email = u_dict.get("email")
+        canonical_username = u_dict.get("username")
+
+        cursor.execute("UPDATE users SET is_active = 0 WHERE id = ? OR username = ?", (u_dict.get("id"), canonical_username))
         conn.commit()
         conn.close()
 
@@ -604,7 +640,7 @@ def deactivate_user(username: Optional[str] = Form(None), user_id: Optional[str]
         send_email_notification(
             user_email,
             "⚠️ Vaila App Account Deactivated",
-            f"Hello {target_identifier},\n\nYour account has been deactivated due to overdue monthly fee. Please upload your payment screenshot to reactivate your account."
+            f"Hello {canonical_username},\n\nYour account has been deactivated due to overdue monthly fee. Please upload your payment screenshot to reactivate your account."
         )
 
     return {"success": True, "message": "User deactivated successfully"}
